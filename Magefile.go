@@ -7,7 +7,7 @@ import (
 	// mage:import
 	build "github.com/grafana/grafana-plugin-sdk-go/build"
 
-	"github.com/portfolio-management/pluginclient/artifacts"
+	"github.com/ignacioballester/oc-plugin-sdk/pluginclient/artifacts"
 )
 
 var Default = build.BuildAll

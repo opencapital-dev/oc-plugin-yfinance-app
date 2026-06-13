@@ -1,0 +1,30 @@
+name: publish
+on:
+  push: { tags: ["v*"] }
+permissions: { contents: read, packages: write, id-token: write }
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.26" }
+      - uses: magefile/mage-action@v3
+        with: { install-only: true }
+      - name: install C cross-compilers
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libssl-dev
+      - run: npm ci && npm run build
+      - name: build backend (linux amd64+arm64)
+        run: |
+          mage build:linux
+          CC=aarch64-linux-gnu-gcc mage build:linuxARM64
+      - uses: sigstore/cosign-installer@v3
+      - uses: ignacioballester/oc-plugin-publish-action@v1
+        with:
+          dir: .
+          id: yfinance-app
+          owner: ignacioballester
+          version: ${{ github.ref_name }}
+          platforms: linux-amd64,linux-arm64

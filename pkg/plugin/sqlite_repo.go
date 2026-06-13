@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/portfolio-management/pluginclient"
+	"github.com/ignacioballester/oc-plugin-sdk/pluginclient"
 )
 
 // TickerMapping is the per-(plugin, org, portfolio) Yahoo-symbol mapping.

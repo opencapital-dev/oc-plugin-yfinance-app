@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	"github.com/portfolio-management/pluginclient"
+	"github.com/ignacioballester/oc-plugin-sdk/pluginclient"
 )
 
 // colIndex maps a read-gateway result's column names to their positions.

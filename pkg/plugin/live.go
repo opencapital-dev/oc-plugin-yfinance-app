@@ -12,7 +12,7 @@ import (
 	yflive "github.com/wnjoon/go-yfinance/pkg/live"
 	yfmodels "github.com/wnjoon/go-yfinance/pkg/models"
 
-	"github.com/portfolio-management/pluginclient"
+	"github.com/ignacioballester/oc-plugin-sdk/pluginclient"
 )
 
 // symbolTarget is one (instrument, portfolio) pair that a Yahoo ticker backs.
