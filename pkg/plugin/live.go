@@ -167,7 +167,7 @@ func (s *LiveSubscriber) publishTick(data *yfmodels.PricingData) {
 			VALUES ($1, $2, $3, to_timestamp($4::double precision / 1e6), now(), $5, $6, $7, $8, $9)
 		`,
 			QuoteNamespace, tgt.InstrumentID, tgt.PortfolioID, observedAtUs,
-			"yfinance", s.pluginID, "", string(payloadJSON), rwKey,
+			"yahoo_ws", s.pluginID, "", string(payloadJSON), rwKey,
 		)
 		if err != nil {
 			log.DefaultLogger.Warn("live tick publish failed",

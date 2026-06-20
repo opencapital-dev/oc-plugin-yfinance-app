@@ -112,10 +112,11 @@ func (a *App) SetClassification(ctx context.Context, instrumentID, portfolioID s
 		   SET sector      = COALESCE($1, sector),
 		       subindustry = COALESCE($2, subindustry),
 		       vendor_meta = $3::jsonb,
-		       updated_at  = $4
-		 WHERE instrument_id = $5
-		   AND portfolio_id  = $6
-	`, sector, industry, string(metaJSON), nowMicros(), instrumentID, portfolioID)
+		       updated_at  = $4,
+		       updated_by  = $5
+		 WHERE instrument_id = $6
+		   AND portfolio_id  = $7
+	`, sector, industry, string(metaJSON), nowMicros(), source, instrumentID, portfolioID)
 	if err != nil {
 		return TickerMapping{}, fmt.Errorf("set classification: %w", err)
 	}
