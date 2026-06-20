@@ -93,10 +93,45 @@ func NewApp(_ context.Context, settings backend.AppInstanceSettings) (instancemg
 	return app, nil
 }
 
-// ensureSchema is a no-op placeholder. The Postgres yfinance schema is created
-// by the platform's init scripts, not by the plugin. Called once at startup.
-func (a *App) ensureSchema(_ context.Context) {
-	log.DefaultLogger.Debug("yfinance: ensureSchema: schema managed by platform init scripts")
+// ensureSchema creates the yfinance Postgres schema and supporting objects
+// idempotently. It is called once at startup in a goroutine; errors are logged
+// and surfaced so the caller can decide whether to abort.
+func (a *App) ensureSchema(ctx context.Context) {
+	stmts := []string{
+		`CREATE SCHEMA IF NOT EXISTS yfinance`,
+		`CREATE TABLE IF NOT EXISTS yfinance.instrument_ticker_mapping (
+    instrument_id VARCHAR NOT NULL,
+    portfolio_id  VARCHAR NOT NULL,
+    symbol        VARCHAR NOT NULL,
+    sector        VARCHAR,
+    subindustry   VARCHAR,
+    vendor_meta   JSONB NOT NULL DEFAULT '{}'::jsonb,
+    subscribed    BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at    BIGINT NOT NULL,
+    updated_at    BIGINT NOT NULL,
+    updated_by    VARCHAR,
+    PRIMARY KEY (instrument_id, portfolio_id)
+)`,
+		`CREATE INDEX IF NOT EXISTS itm_symbol_idx ON yfinance.instrument_ticker_mapping(symbol)`,
+		`CREATE INDEX IF NOT EXISTS itm_updated_idx ON yfinance.instrument_ticker_mapping(updated_at)`,
+		`CREATE OR REPLACE VIEW yfinance.gw_classification AS
+  SELECT portfolio_id AS portfolio, instrument_id, updated_at AS ts, sector, subindustry AS industry
+  FROM yfinance.instrument_ticker_mapping`,
+	}
+	for _, stmt := range stmts {
+		if _, err := a.client.PGExec(ctx, stmt); err != nil {
+			log.DefaultLogger.Error("yfinance: ensureSchema failed", "err", err, "stmt", stmt[:min(len(stmt), 60)])
+			return
+		}
+	}
+	log.DefaultLogger.Debug("yfinance: ensureSchema: schema ready")
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (a *App) Dispose() {
