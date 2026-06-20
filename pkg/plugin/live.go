@@ -9,65 +9,27 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/opencapital-dev/oc-plugin-sdk/datakey"
 	yflive "github.com/wnjoon/go-yfinance/pkg/live"
 	yfmodels "github.com/wnjoon/go-yfinance/pkg/models"
-
-	"github.com/ignacioballester/oc-plugin-sdk/pluginclient"
 )
 
-// symbolTarget is one (instrument, portfolio) pair that a Yahoo ticker backs.
-// A single symbol can serve multiple portfolios (e.g. AAPL in portfolio-A and
-// portfolio-B) — each gets its own published record with the correct portfolio_id.
 type symbolTarget struct {
 	InstrumentID string
 	PortfolioID  string
 }
 
-// LiveSubscriber owns the WebSocket connection and the symbol→targets
-// reverse map. The discovery loop calls SetSymbols(mappings) on each tick;
-// LiveSubscriber diffs against its prior set and sends only
-// Subscribe/Unsubscribe deltas to Yahoo.
-//
-// Each PricingData callback maps `data.ID` (a Yahoo ticker) back to the
-// originating (instrument_id, portfolio_id) pairs via the reverse map, then
-// publishes one prices.quote envelope per pair to data.v2 via pluginclient,
-// and updates the LiveTickMap so the /yf/instruments endpoint can render
-// "live" badges.
 type LiveSubscriber struct {
-	ws      *yflive.WebSocket
-	client  *pluginclient.Client
-	ticks   *LiveTickMap
-	mu      sync.Mutex
-	current map[string]struct{}
-	// bySymbol maps upper(symbol) → []symbolTarget (one per (instrument, portfolio) pair)
+	ws       *yflive.WebSocket
+	client   rwPGClient
+	ticks    *LiveTickMap
+	pluginID string
+	mu       sync.Mutex
+	current  map[string]struct{}
 	bySymbol map[string][]symbolTarget
-
-	// publishCtx carries identity for asynchronous WebSocket callbacks
-	// that arrive outside any HTTP request lifecycle. The discovery loop
-	// refreshes this on every tick so the cached session JWT is fresh.
-	publishCtx atomicCtx
 }
 
-// atomicCtx is the tiny sync wrapper around the publish ctx — multiple
-// goroutines read while the discovery loop writes.
-type atomicCtx struct {
-	mu  sync.RWMutex
-	ctx context.Context
-}
-
-func (a *atomicCtx) load() context.Context {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.ctx
-}
-
-func (a *atomicCtx) store(ctx context.Context) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.ctx = ctx
-}
-
-func NewLiveSubscriber(client *pluginclient.Client, ticks *LiveTickMap) (*LiveSubscriber, error) {
+func NewLiveSubscriber(client rwPGClient, ticks *LiveTickMap, pluginID string) (*LiveSubscriber, error) {
 	ws, err := yflive.New()
 	if err != nil {
 		return nil, err
@@ -76,6 +38,7 @@ func NewLiveSubscriber(client *pluginclient.Client, ticks *LiveTickMap) (*LiveSu
 		ws:       ws,
 		client:   client,
 		ticks:    ticks,
+		pluginID: pluginID,
 		current:  map[string]struct{}{},
 		bySymbol: map[string][]symbolTarget{},
 	}, nil
@@ -92,10 +55,6 @@ func (s *LiveSubscriber) Start(_ context.Context) error {
 	return nil
 }
 
-// SetSymbols replaces the subscription set + reverse map and refreshes
-// the publish ctx (so the next tick's PublishData picks up a fresh
-// identity-bearing context). The mappings slice is already the full
-// subscribed set from discovery — one entry per (instrument, portfolio) pair.
 func (s *LiveSubscriber) SetSymbols(ctx context.Context, mappings []TickerMapping) {
 	desired := map[string]struct{}{}
 	bySymbol := map[string][]symbolTarget{}
@@ -127,7 +86,6 @@ func (s *LiveSubscriber) SetSymbols(ctx context.Context, mappings []TickerMappin
 	s.current = desired
 	s.bySymbol = bySymbol
 	s.mu.Unlock()
-	s.publishCtx.store(ctx)
 
 	sort.Strings(toAdd)
 	sort.Strings(toRemove)
@@ -186,15 +144,9 @@ func (s *LiveSubscriber) publishTick(data *yfmodels.PricingData) {
 		ask = mid
 	}
 
-	ctx := s.publishCtx.load()
-	if ctx == nil {
-		// No identity yet — the first tick can race the first discovery
-		// pass; drop silently and rely on the next callback.
-		return
-	}
+	ctx := context.Background()
 
 	for _, tgt := range targets {
-		// Update liveness per (instrument, portfolio) pair.
 		s.ticks.Set(tgt.InstrumentID+"|"+tgt.PortfolioID, observedAtUs)
 
 		payloadJSON, perr := json.Marshal(map[string]any{
@@ -208,13 +160,16 @@ func (s *LiveSubscriber) publishTick(data *yfmodels.PricingData) {
 		if perr != nil {
 			continue
 		}
-		body := map[string]any{
-			"source_id":    tgt.InstrumentID,
-			"observed_at":  observedAtUs,
-			"portfolio_id": tgt.PortfolioID,
-			"payload":      string(payloadJSON),
-		}
-		if _, err := s.client.PublishData(ctx, QuoteNamespace, body); err != nil {
+		rwKey := datakey.DataKey(s.pluginID, QuoteNamespace, tgt.PortfolioID, tgt.InstrumentID, observedAtUs)
+		_, err := s.client.Exec(ctx, `
+			INSERT INTO data_log
+				(source_namespace, source_id, portfolio_id, observed_at, ingest_ts, source, plugin_id, trace_id, payload, rw_key)
+			VALUES ($1, $2, $3, to_timestamp($4::double precision / 1e6), now(), $5, $6, $7, $8, $9)
+		`,
+			QuoteNamespace, tgt.InstrumentID, tgt.PortfolioID, observedAtUs,
+			"yfinance", s.pluginID, "", string(payloadJSON), rwKey,
+		)
+		if err != nil {
 			log.DefaultLogger.Warn("live tick publish failed",
 				"instrument_id", tgt.InstrumentID,
 				"portfolio_id", tgt.PortfolioID,
