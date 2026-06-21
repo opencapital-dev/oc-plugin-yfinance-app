@@ -103,5 +103,3 @@ require (
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7 // indirect
 	h12.io/socks v1.0.3 // indirect
 )
-
-replace github.com/opencapital-dev/oc-plugin-sdk v0.2.0 => ../oc-plugin-sdk
