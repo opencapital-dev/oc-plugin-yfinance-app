@@ -5,7 +5,7 @@ go 1.26.3
 require (
 	github.com/google/uuid v1.6.0
 	github.com/grafana/grafana-plugin-sdk-go v0.292.1
-	github.com/opencapital-dev/oc-plugin-sdk v0.2.0
+	github.com/opencapital-dev/oc-plugin-sdk v0.2.1
 	github.com/wnjoon/go-yfinance v1.3.0
 	go.opentelemetry.io/otel/trace v1.43.0
 	golang.org/x/time v0.15.0
