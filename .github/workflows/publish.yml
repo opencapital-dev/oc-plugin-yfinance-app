@@ -57,10 +57,11 @@ jobs:
         run: |
           cp /tmp/backends/*/gpx_* dist/
           ls -la dist/
-      - uses: ignacioballester/oc-plugin-publish-action@v1
+      - uses: opencapital-dev/oc-plugin-publish-action@v1
         with:
           dir: .
           id: yfinance-app
-          owner: ignacioballester
+          owner: opencapital-dev
           version: ${{ github.ref_name }}
           platforms: darwin-amd64,darwin-arm64,windows-amd64
+          catalog-token: ${{ secrets.CATALOG_PR_TOKEN }}
