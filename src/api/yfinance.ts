@@ -14,6 +14,8 @@ export type BackfillState =
 export type InstrumentUsedRow = {
   instrument_id: string;
   portfolio_id: string;
+  /** Display name from the portfolios table; null when unknown (RW down). */
+  portfolio_name: string | null;
   first_seen_ts: number;
   last_seen_ts: number;
   event_count: number;
@@ -93,17 +95,15 @@ export type SymbolChangeResponse = {
   symbol: string;
   sector: string | null;
   industry: string | null;
-  tombstones: number;
-  job_id: string;
 };
 
 /**
  * Change a (instrument, portfolio) pair's Yahoo symbol. The Go plugin upserts
- * the row in `instrument_ticker_mapping`; the in-process discovery loop picks
- * the change up on its next tick (≈15s), tombstones the old ticker's bars
- * under `prices.ohlcv`, and enqueues a fresh backfill. The UI should
- * refresh `/yf/instruments` after this returns to pick up the cleaned
- * `last_observed_at`.
+ * the row in `instrument_ticker_mapping` and, when the symbol actually
+ * changes, purges that instrument's stale prices (backfilled bars + live
+ * quotes) in one scoped delete. The in-process discovery loop picks the
+ * change up on its next tick (≈15s) and re-backfills under the new symbol.
+ * The UI should refresh `/yf/instruments` after this returns.
  */
 export function changeYahooSymbol(instrumentId: string, portfolioId: string, symbol: string) {
   return yfRequest<SymbolChangeResponse>(

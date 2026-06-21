@@ -135,10 +135,11 @@ export function InstrumentsPage() {
       const key = pairKey(row);
       setPendingPatches((cur) => ({ ...cur, [key]: true }));
       try {
-        const resp = await changeYahooSymbol(row.instrument_id, row.portfolio_id, symbol);
+        await changeYahooSymbol(row.instrument_id, row.portfolio_id, symbol);
         if (!opts.silent) {
+          const pname = row.portfolio_name || row.portfolio_id;
           appEvents.emit(AppEvents.alertSuccess, [
-            `Mapped ${row.instrument_id} (${row.portfolio_id}) → ${symbol}. Purged ${resp.tombstones} stale bars; backfill enqueued.`,
+            `Mapped ${row.instrument_id} (${pname}) → ${symbol}. Stale prices purged; backfill enqueued.`,
           ]);
         }
         await refresh();
@@ -219,23 +220,48 @@ export function InstrumentsPage() {
     void Promise.all(workers).then(() => void refresh());
   }, [rows, fetchCandidates, applySymbol, refresh]);
 
+  // portfolio_id → display name (falls back to the id when unknown).
+  const portfolioNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of rows ?? []) {
+      m.set(r.portfolio_id, r.portfolio_name || r.portfolio_id);
+    }
+    return m;
+  }, [rows]);
+
+  // Filter options: value = id (stable), label = name. Sorted by name so the
+  // dropdown reads naturally.
   const portfolioOptions = useMemo(
-    () => Array.from(new Set((rows ?? []).map((r) => r.portfolio_id))).sort(),
-    [rows],
+    () =>
+      Array.from(portfolioNameById.entries())
+        .map(([id, name]) => ({ label: name, value: id }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [portfolioNameById],
   );
 
   const didAutoSelectPortfolio = useRef(false);
   useEffect(() => {
     if (!didAutoSelectPortfolio.current && portfolioFilter === null && portfolioOptions.length > 0) {
       didAutoSelectPortfolio.current = true;
-      setPortfolioFilter(portfolioOptions[0]);
+      setPortfolioFilter(portfolioOptions[0].value);
     }
   }, [portfolioOptions, portfolioFilter]);
   // A portfolio must be selected before instruments are shown — the table is
   // per-portfolio, and showing every portfolio's instruments at once is
   // misleading. No selection => empty (the prompt below renders instead).
+  // Deterministic order by instrument_id. The backend list query has no
+  // ORDER BY, so each poll/refresh can return pairs in a different order;
+  // without this the rows visibly reshuffle on every refresh (and on the
+  // refresh storm a ticker change triggers). Sorting on a stable key keeps
+  // each row in place.
   const visibleRows = useMemo(
-    () => (portfolioFilter ? (rows ?? []).filter((r) => r.portfolio_id === portfolioFilter) : []),
+    () =>
+      portfolioFilter
+        ? (rows ?? [])
+            .filter((r) => r.portfolio_id === portfolioFilter)
+            .slice()
+            .sort((a, b) => a.instrument_id.localeCompare(b.instrument_id))
+        : [],
     [rows, portfolioFilter],
   );
 
@@ -267,7 +293,7 @@ export function InstrumentsPage() {
               isClearable
               placeholder="All portfolios"
               value={portfolioFilter}
-              options={portfolioOptions.map((id) => ({ label: id, value: id }))}
+              options={portfolioOptions}
               onChange={(v) => setPortfolioFilter(v?.value ?? null)}
             />
           </div>

@@ -13,6 +13,45 @@ type RwFxPairUsedRow struct {
 	EventCount  int    `json:"event_count"`
 }
 
+// PurgeInstrumentPrices removes every price row — backfilled OHLCV bars AND
+// live quotes — for one (portfolio, instrument). Called on a symbol remap:
+// the instrument_id now points at a different Yahoo symbol, so all prior
+// prices (possibly a different currency/scale, e.g. a stray TWD quote on a
+// GBP equity) are stale. One scoped DELETE over pgwire; the next discovery
+// tick re-backfills OHLCV and the live subscription repopulates quotes.
+func (a *App) PurgeInstrumentPrices(ctx context.Context, instrumentID, portfolioID string) error {
+	_, err := a.client.Exec(ctx,
+		`DELETE FROM data_log
+		   WHERE source_namespace IN ('prices.ohlcv', 'prices.quote')
+		     AND source_id = $1 AND portfolio_id = $2`,
+		instrumentID, portfolioID)
+	if err != nil {
+		return fmt.Errorf("purge instrument prices: %w", err)
+	}
+	return nil
+}
+
+// PortfolioNames maps portfolio_id → display name (from the CDC-mirrored
+// `portfolios.attributes->>'name'`). Used to label portfolios by name instead
+// of UUID in the UI. RW down / missing name → caller falls back to the id.
+func (a *App) PortfolioNames(ctx context.Context) (map[string]string, error) {
+	res, err := a.client.Query(ctx,
+		`SELECT portfolio_id, attributes->>'name' AS name FROM portfolios`)
+	if err != nil {
+		return nil, fmt.Errorf("portfolio names: %w", err)
+	}
+	col := colIndex(res.Columns)
+	out := make(map[string]string, len(res.Rows))
+	for _, row := range res.Rows {
+		id := rwString(row[col["portfolio_id"]])
+		name := rwString(row[col["name"]])
+		if id != "" && name != "" {
+			out[id] = name
+		}
+	}
+	return out, nil
+}
+
 func (a *App) ListFxPairsUsed(ctx context.Context) ([]RwFxPairUsedRow, error) {
 	res, err := a.client.Query(ctx,
 		`SELECT base_ccy, quote_ccy, first_seen_ts, last_seen_ts, event_count FROM fx_pairs_used`)

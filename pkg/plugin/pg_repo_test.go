@@ -56,6 +56,55 @@ func TestUpsertTickerMappingSQL(t *testing.T) {
 	}
 }
 
+func mappingResult(symbol string) pluginclient.Result {
+	return pluginclient.Result{
+		Columns: []pluginclient.Column{
+			{Name: "instrument_id"}, {Name: "portfolio_id"}, {Name: "symbol"},
+			{Name: "sector"}, {Name: "subindustry"}, {Name: "vendor_meta"},
+			{Name: "subscribed"}, {Name: "created_at"}, {Name: "updated_at"}, {Name: "updated_by"},
+		},
+		Rows: [][]any{
+			{"instr-1", "port-1", symbol, nil, nil, map[string]interface{}{}, true, int64(1000), int64(1000), nil},
+		},
+	}
+}
+
+// A symbol remap points instrument_id at a different company, so every price
+// previously written under it is stale — purge both backfilled bars and live
+// quotes. This is the leftover-datapoint fix.
+func TestUpsertTickerMappingPurgesPricesOnSymbolChange(t *testing.T) {
+	fc := &fakeClient{pgQueryResult: mappingResult("OLD.L")}
+	app := makeAppWithFakeClient(fc)
+	_, err := app.UpsertTickerMapping(context.Background(), "instr-1", "port-1", "NEW", nil, "test")
+	if err != nil {
+		t.Fatalf("UpsertTickerMapping: %v", err)
+	}
+	if len(fc.execCalls) != 1 {
+		t.Fatalf("expected 1 Exec (price purge), got %d", len(fc.execCalls))
+	}
+	sql := fc.execCalls[0].sql
+	if !strings.Contains(sql, "DELETE FROM data_log") {
+		t.Errorf("purge SQL not a DELETE on data_log: %s", sql)
+	}
+	if !strings.Contains(sql, "prices.ohlcv") || !strings.Contains(sql, "prices.quote") {
+		t.Errorf("purge must cover both price namespaces: %s", sql)
+	}
+}
+
+// Re-asserting the same symbol (idempotent POST, classification refresh) must
+// not purge — that would drop live quotes for no reason.
+func TestUpsertTickerMappingNoPurgeWhenSymbolUnchanged(t *testing.T) {
+	fc := &fakeClient{pgQueryResult: mappingResult("AAPL")}
+	app := makeAppWithFakeClient(fc)
+	_, err := app.UpsertTickerMapping(context.Background(), "instr-1", "port-1", "AAPL", nil, "test")
+	if err != nil {
+		t.Fatalf("UpsertTickerMapping: %v", err)
+	}
+	if len(fc.execCalls) != 0 {
+		t.Fatalf("expected no purge when symbol unchanged, got %d Exec calls", len(fc.execCalls))
+	}
+}
+
 func TestGetTickerMappingNotFound(t *testing.T) {
 	fc := &fakeClient{
 		pgQueryResult: pluginclient.Result{Columns: []pluginclient.Column{{Name: "instrument_id"}}, Rows: nil},

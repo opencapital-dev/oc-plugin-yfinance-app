@@ -53,18 +53,12 @@ func runBackfillJob(
 	}
 	symbol := mapping.Symbol
 
-	if _, derr := client.Exec(ctx,
-		`DELETE FROM data_log WHERE source_namespace='prices.ohlcv' AND source_id=$1 AND portfolio_id=$2`,
-		job.InstrumentID, job.PortfolioID,
-	); derr != nil {
-		log.DefaultLogger.Warn("ohlcv tombstone failed",
-			"instrument_id", job.InstrumentID,
-			"portfolio_id", job.PortfolioID, "err", derr)
-	} else {
-		log.DefaultLogger.Info("ohlcv purge",
-			"instrument_id", job.InstrumentID,
-			"portfolio_id", job.PortfolioID)
-	}
+	// No pre-delete here: bars are upserted on rw_key (plugin|ns|portfolio|
+	// instrument|observed_at), so re-running a backfill overwrites the same
+	// timestamps idempotently and a grown window just inserts earlier bars.
+	// Stale prices from a *symbol change* are purged at the remap site
+	// (UpsertTickerMapping → PurgeInstrumentPrices), which also covers live
+	// quotes — something this OHLCV worker must never delete.
 
 	start := time.UnixMicro(job.StartTsUs).UTC()
 	end := time.UnixMicro(job.EndTsUs).UTC()

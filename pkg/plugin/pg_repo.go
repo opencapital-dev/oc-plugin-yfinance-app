@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
 // TickerMapping is the per-(plugin, portfolio) Yahoo-symbol mapping.
@@ -74,6 +76,17 @@ func (a *App) UpsertTickerMapping(ctx context.Context, instrumentID, portfolioID
 	if err != nil {
 		return TickerMapping{}, fmt.Errorf("marshal vendor_meta: %w", err)
 	}
+
+	// Capture the prior symbol before the upsert. A changed symbol is a
+	// remap to a different company, so every price previously written under
+	// this instrument_id (backfilled bars + live quotes) is stale and must
+	// be purged — otherwise an old quote in a different currency lingers and
+	// inflates NAV (the leftover-datapoint bug).
+	priorSymbol := ""
+	if prior, perr := a.GetTickerMapping(ctx, instrumentID, portfolioID); perr == nil {
+		priorSymbol = prior.Symbol
+	}
+
 	now := nowMicros()
 	_, err = a.client.PGExec(ctx, `
 		INSERT INTO yfinance.instrument_ticker_mapping
@@ -88,6 +101,15 @@ func (a *App) UpsertTickerMapping(ctx context.Context, instrumentID, portfolioID
 	if err != nil {
 		return TickerMapping{}, fmt.Errorf("upsert mapping: %w", err)
 	}
+
+	if priorSymbol != "" && priorSymbol != symbol {
+		if perr := a.PurgeInstrumentPrices(ctx, instrumentID, portfolioID); perr != nil {
+			log.DefaultLogger.Warn("price purge on symbol remap failed",
+				"instrument_id", instrumentID, "portfolio_id", portfolioID,
+				"old_symbol", priorSymbol, "new_symbol", symbol, "err", perr)
+		}
+	}
+
 	return a.GetTickerMapping(ctx, instrumentID, portfolioID)
 }
 

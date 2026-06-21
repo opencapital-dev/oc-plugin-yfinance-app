@@ -11,6 +11,7 @@ import (
 type InstrumentUsedRow struct {
 	InstrumentID           string   `json:"instrument_id"`
 	PortfolioID            string   `json:"portfolio_id"`
+	PortfolioName          *string  `json:"portfolio_name"`
 	Kind                   string   `json:"kind"`
 	Currency               *string  `json:"currency"`
 	BaseCurrency           *string  `json:"base_currency"`
@@ -76,6 +77,7 @@ func (a *App) handleListInstruments(w http.ResponseWriter, r *http.Request) {
 		add(m.InstrumentID, m.PortfolioID)
 	}
 
+	portfolioNames, _ := a.PortfolioNames(ctx)
 	minBusinessTs, _ := a.MinBusinessTs(ctx)
 	lastObserved, _ := a.LastObservedPerInstrument(ctx)
 	lastDataByInstrument, _ := a.LastDataPerInstrument(ctx)
@@ -113,9 +115,14 @@ func (a *App) handleListInstruments(w http.ResponseWriter, r *http.Request) {
 			tickAge = &age
 		}
 		hp := heldByPair[pairKey(p.instrument, p.portfolio)]
+		var pname *string
+		if n, ok := portfolioNames[p.portfolio]; ok && n != "" {
+			pname = &n
+		}
 		out = append(out, InstrumentUsedRow{
 			InstrumentID:           p.instrument,
 			PortfolioID:            p.portfolio,
+			PortfolioName:          pname,
 			Kind:                   hp.Kind,
 			Currency:               nilIfEmpty(hp.Currency),
 			BaseCurrency:           nilIfEmpty(hp.BaseCurrency),

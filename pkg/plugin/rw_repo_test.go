@@ -42,26 +42,30 @@ func TestOhlcvDataLogInsert(t *testing.T) {
 	}
 }
 
-func TestTombstoneDelete(t *testing.T) {
+func TestPurgeInstrumentPrices(t *testing.T) {
 	fc := &fakeClient{}
 	app := &App{client: fc, pluginID: "yfinance-app"}
 	ctx := context.Background()
 
-	_, err := app.client.Exec(ctx,
-		`DELETE FROM data_log WHERE source_namespace='prices.ohlcv' AND source_id=$1 AND portfolio_id=$2`,
-		"instr-1", "port-1",
-	)
-	if err != nil {
-		t.Fatalf("Exec: %v", err)
+	if err := app.PurgeInstrumentPrices(ctx, "instr-1", "port-1"); err != nil {
+		t.Fatalf("PurgeInstrumentPrices: %v", err)
+	}
+	if len(fc.execCalls) != 1 {
+		t.Fatalf("expected 1 Exec (purge), got %d", len(fc.execCalls))
 	}
 	sql := fc.execCalls[0].sql
 	if !strings.Contains(sql, "DELETE FROM data_log") {
-		t.Errorf("SQL not a DELETE: %s", sql)
+		t.Errorf("SQL not a DELETE on data_log: %s", sql)
 	}
-	if !strings.Contains(sql, "source_namespace='prices.ohlcv'") {
-		t.Errorf("SQL missing namespace filter: %s", sql)
+	// Both price namespaces must be purged — quotes were the leftover that
+	// the old ohlcv-only purge missed.
+	if !strings.Contains(sql, "prices.ohlcv") || !strings.Contains(sql, "prices.quote") {
+		t.Errorf("purge must cover both price namespaces: %s", sql)
 	}
-	_ = app
+	args := fc.execCalls[0].args
+	if args[0] != "instr-1" || args[1] != "port-1" {
+		t.Errorf("purge args = %v, want [instr-1 port-1]", args)
+	}
 }
 
 func TestRwHelpers(t *testing.T) {
