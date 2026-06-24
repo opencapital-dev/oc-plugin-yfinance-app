@@ -1,5 +1,5 @@
 def _fred_key():
-    r = pg("SELECT value FROM basic_data.app_settings WHERE key = $1", "fred_api_key")
+    r = sql("SELECT value FROM basic_data.app_settings WHERE key = $1", "fred_api_key")
     if r.is_empty() or r["value"][0] in (None, ""):
         raise ValueError("FRED API key not set — add it in Basic Data → Settings")
     return r["value"][0]
