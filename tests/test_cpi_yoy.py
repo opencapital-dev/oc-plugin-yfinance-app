@@ -1,4 +1,8 @@
+from pathlib import Path
+
 import polars as pl
+
+LIBRARY_PANELS = Path(__file__).resolve().parent.parent / "library-panels"
 
 
 def _run(source: str, country: str, fake_fetch, fake_pg):
@@ -13,7 +17,7 @@ def _run(source: str, country: str, fake_fetch, fake_pg):
 
 
 def test_cpi_yoy_us_uses_fred_and_computes_yoy():
-    src = open("library-panels/cpi_yoy.py").read()
+    src = (LIBRARY_PANELS / "cpi_yoy.py").read_text()
     def fake_pg(q, *a): return pl.DataFrame({"value": ["KEY"]})
     def fake_fetch(url, **kw):
         # 13 monthly index points 100..112 → last YoY = 12%
