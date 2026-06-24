@@ -33,9 +33,12 @@ def _yoy(df, periods):  # periods: 12 monthly, 4 quarterly
 
 SERIES = {
     "US": ("fred", "UNRATE"),
-    "EA": ("dbnomics", "Eurostat/une_rt_m/M.SA.TOTAL.PC_ACT.T.EA19"),
-    "GB": ("dbnomics", "OECD/STLABOUR/GBR.LRHUTTTT.STSA.M"),
-    "JP": ("dbnomics", "OECD/STLABOUR/JPN.LRHUTTTT.STSA.M"),
+    "EA": ("dbnomics", "Eurostat/une_rt_m/M.SA.TOTAL.PC_ACT.T.EA20"),             # was EA19 (404; EA composition updated to EA20)
+    "GB": ("dbnomics", "OECD/DSD_LFS@DF_IALFS_UNE_M/GBR.UNE_LF_M.PT_LF_SUB._Z.Y._T.Y_GE15._Z.M"),  # was OECD/STLABOUR/GBR (404; dataset renamed DSD_LFS@DF_IALFS_UNE_M)
+    "JP": ("dbnomics", "OECD/DSD_LFS@DF_IALFS_UNE_M/JPN.UNE_LF_M.PT_LF_SUB._Z.Y._T.Y_GE15._Z.M"),  # was OECD/STLABOUR/JPN
+    # UNRESOLVED: China monthly unemployment not available in OECD/DSD_LFS (CHN not a member).
+    # NBS publishes registered unemployment (quarterly) but not ILO-methodology monthly rate.
+    # Operator should source from e.g. NBS or accept panel error for CN.
     "CN": ("dbnomics", "OECD/STLABOUR/CHN.LRHUTTTT.STSA.M"),
 }
 

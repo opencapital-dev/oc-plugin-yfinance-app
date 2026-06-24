@@ -31,12 +31,14 @@ def _yoy(df, periods):  # periods: 12 monthly, 4 quarterly
               .with_columns((pl.col("value") / pl.col("value").shift(periods) * 100 - 100).alias("value"))
               .drop_nulls())
 
-TEN = {"US": ("fred", "DGS10"), "EA": ("dbnomics", "Eurostat/irt_lt_mcby_d/D.EA"),
-       "GB": ("dbnomics", "OECD/MEI_FIN/IRLT.GBR.M"), "JP": ("dbnomics", "OECD/MEI_FIN/IRLT.JPN.M"),
-       "CN": ("dbnomics", "OECD/MEI_FIN/IRLT.CHN.M")}
+TEN = {"US": ("fred", "DGS10"), "EA": ("dbnomics", "Eurostat/irt_lt_mcby_d/D.MCBY.EA"),  # was D.EA (404; series code is D.MCBY.EA)
+       "GB": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/GBR.M.IRLT.PA._Z._Z._Z._Z.N"),   # was OECD/MEI_FIN/IRLT.GBR.M (dataset renamed)
+       "JP": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/JPN.M.IRLT.PA._Z._Z._Z._Z.N"),   # was OECD/MEI_FIN/IRLT.JPN.M
+       "CN": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/CHN.M.IRLT.PA._Z._Z._Z._Z.N")}   # was OECD/MEI_FIN/IRLT.CHN.M
 TWO = {"US": ("fred", "DGS2"), "EA": ("dbnomics", "Eurostat/irt_st_m/M.IRT_M3.EA"),
-       "GB": ("dbnomics", "OECD/MEI_FIN/IR3TIB.GBR.M"), "JP": ("dbnomics", "OECD/MEI_FIN/IR3TIB.JPN.M"),
-       "CN": ("dbnomics", "OECD/MEI_FIN/IR3TIB.CHN.M")}
+       "GB": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/GBR.M.IR3TIB.PA._Z._Z._Z._Z.N"), # was OECD/MEI_FIN/IR3TIB.GBR.M
+       "JP": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/JPN.M.IR3TIB.PA._Z._Z._Z._Z.N"), # was OECD/MEI_FIN/IR3TIB.JPN.M
+       "CN": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/CHN.M.IR3TIB.PA._Z._Z._Z._Z.N")} # was OECD/MEI_FIN/IR3TIB.CHN.M
 
 @metric(output="series")
 def curve_slope():

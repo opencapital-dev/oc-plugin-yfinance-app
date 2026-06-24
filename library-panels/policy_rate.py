@@ -34,9 +34,9 @@ def _yoy(df, periods):  # periods: 12 monthly, 4 quarterly
 SERIES = {
     "US": ("fred", "DFF"),
     "EA": ("dbnomics", "ECB/FM/D.U2.EUR.4F.KR.MRR_FR.LEV"),
-    "GB": ("dbnomics", "BOE/IUDBEDR/IUDBEDR"),
-    "JP": ("dbnomics", "BIS/cbpol/D.JP"),
-    "CN": ("dbnomics", "BIS/cbpol/D.CN"),
+    "GB": ("dbnomics", "BIS/WS_CBPOL/D.GB"),       # was BOE/IUDBEDR/IUDBEDR (404)
+    "JP": ("dbnomics", "BIS/WS_CBPOL/D.JP"),        # was BIS/cbpol/D.JP (404; dataset renamed WS_CBPOL)
+    "CN": ("dbnomics", "BIS/WS_CBPOL/D.CN"),        # was BIS/cbpol/D.CN (404; dataset renamed WS_CBPOL)
 }
 
 @metric(output="series")

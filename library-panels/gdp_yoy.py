@@ -36,6 +36,9 @@ SERIES = {
     "EA": ("dbnomics", "Eurostat/namq_10_gdp/Q.CLV10_MEUR.SCA.B1GQ.EA19"),
     "GB": ("dbnomics", "OECD/QNA/GBR.B1_GE.LNBQRSA.Q"),
     "JP": ("dbnomics", "OECD/QNA/JPN.B1_GE.LNBQRSA.Q"),
+    # UNRESOLVED: China is not in OECD/QNA. NBS/Q_A0102/A010201 provides constant-price quarterly
+    # levels but with sparse history (2024+); NBS/Q_A0103/A010301 gives YoY index (preceding
+    # year=100) which would need different handling than _yoy(). Operator must decide approach.
     "CN": ("dbnomics", "OECD/QNA/CHN.B1_GE.LNBQRSA.Q"),
 }
 

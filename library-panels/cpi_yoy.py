@@ -35,9 +35,9 @@ def _yoy(df, periods):  # periods: 12 monthly, 4 quarterly
 SERIES = {
     "US": ("fred", "CPIAUCSL"),
     "EA": ("dbnomics", "Eurostat/prc_hicp_midx/M.I15.CP00.EA"),
-    "GB": ("dbnomics", "OECD/PRICES_CPI/GBR.CPALTT01.IXOB.M"),
-    "JP": ("dbnomics", "OECD/PRICES_CPI/JPN.CPALTT01.IXOB.M"),
-    "CN": ("dbnomics", "OECD/PRICES_CPI/CHN.CPALTT01.IXOB.M"),
+    "GB": ("dbnomics", "OECD/DSD_G20_PRICES@DF_G20_PRICES/GBR.M.HICP.CPI.IX._T.N._Z"),  # was OECD/PRICES_CPI/GBR.CPALTT01.IXOB.M (404; MEI_FIN replaced by DSD_G20_PRICES)
+    "JP": ("dbnomics", "OECD/DSD_G20_PRICES@DF_G20_PRICES/JPN.M.N.CPI.IX._T.N._Z"),      # was OECD/PRICES_CPI/JPN.CPALTT01.IXOB.M
+    "CN": ("dbnomics", "OECD/DSD_G20_PRICES@DF_G20_PRICES/CHN.M.N.CPI.IX._T.N._Z"),      # was OECD/PRICES_CPI/CHN.CPALTT01.IXOB.M
 }
 
 @metric(output="series")

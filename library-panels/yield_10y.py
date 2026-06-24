@@ -33,10 +33,10 @@ def _yoy(df, periods):  # periods: 12 monthly, 4 quarterly
 
 SERIES = {
     "US": ("fred", "DGS10"),
-    "EA": ("dbnomics", "Eurostat/irt_lt_mcby_d/D.EA"),
-    "GB": ("dbnomics", "OECD/MEI_FIN/IRLT.GBR.M"),
-    "JP": ("dbnomics", "OECD/MEI_FIN/IRLT.JPN.M"),
-    "CN": ("dbnomics", "OECD/MEI_FIN/IRLT.CHN.M"),
+    "EA": ("dbnomics", "Eurostat/irt_lt_mcby_d/D.MCBY.EA"),                       # was D.EA (404; series code is D.MCBY.EA)
+    "GB": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/GBR.M.IRLT.PA._Z._Z._Z._Z.N"), # was OECD/MEI_FIN/IRLT.GBR.M (404; MEI_FIN → DSD_STES@DF_FINMARK)
+    "JP": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/JPN.M.IRLT.PA._Z._Z._Z._Z.N"), # was OECD/MEI_FIN/IRLT.JPN.M
+    "CN": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/CHN.M.IRLT.PA._Z._Z._Z._Z.N"), # was OECD/MEI_FIN/IRLT.CHN.M
 }
 
 @metric(output="series")
