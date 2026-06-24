@@ -79,17 +79,17 @@ func (c *YfClient) Lookup(ctx context.Context, query string, limit int) ([]Looku
 // referencePrice == 0 means "no reference available" — caller falls back
 // to the unconditional divisor (matches the Python behaviour for tickers
 // whose fast_info lookup failed).
-func (c *YfClient) FetchBars(ctx context.Context, symbol, barSize string, start, end time.Time) ([]yfmodels.Bar, string, float64, error) {
+func (c *YfClient) FetchBars(ctx context.Context, symbol, barSize string, start, end time.Time) ([]yfmodels.Bar, string, string, string, float64, error) {
 	if err := c.limiter.Wait(ctx); err != nil {
-		return nil, "", 0, err
+		return nil, "", "", "", 0, err
 	}
 	interval := mapBarSize(barSize)
 	if interval == "" {
-		return nil, "", 0, fmt.Errorf("unsupported bar size: %s", barSize)
+		return nil, "", "", "", 0, fmt.Errorf("unsupported bar size: %s", barSize)
 	}
 	t, err := yfticker.New(symbol)
 	if err != nil {
-		return nil, "", 0, fmt.Errorf("ticker new %s: %w", symbol, err)
+		return nil, "", "", "", 0, fmt.Errorf("ticker new %s: %w", symbol, err)
 	}
 	// AutoAdjust=false to mirror the Python publisher (close is raw,
 	// AdjClose is split/dividend-adjusted). Repair runs explicitly below.
@@ -101,11 +101,13 @@ func (c *YfClient) FetchBars(ctx context.Context, symbol, barSize string, start,
 		Actions:    true,
 	})
 	if err != nil {
-		return nil, "", 0, fmt.Errorf("history %s %s: %w", symbol, barSize, err)
+		return nil, "", "", "", 0, fmt.Errorf("history %s %s: %w", symbol, barSize, err)
 	}
-	currency := ""
+	currency, resolvedSymbol, resolvedExchange := "", "", ""
 	if meta := t.GetHistoryMetadata(); meta != nil {
 		currency = meta.Currency
+		resolvedSymbol = meta.Symbol
+		resolvedExchange = meta.ExchangeName
 	}
 	// Run the wnjoon repairer to catch Yahoo's known 100x unit mixups
 	// (random-day pence/pound swaps + permanent unit switches) and zero
@@ -132,7 +134,7 @@ func (c *YfClient) FetchBars(ctx context.Context, symbol, barSize string, start,
 			referencePrice = pickPositive(fi.LastPrice, fi.PreviousClose, fi.RegularMarketPreviousClose)
 		}
 	}
-	return bars, currency, referencePrice, nil
+	return bars, currency, resolvedSymbol, resolvedExchange, referencePrice, nil
 }
 
 // Info fetches the company's sector + industry from Yahoo's quoteSummary

@@ -123,3 +123,38 @@ func TestPublishTickDataLogInsert(t *testing.T) {
 		t.Errorf("arg[8] rw_key = %v, want %v", args[8], wantRwKey)
 	}
 }
+
+func TestCanonicalSymbol(t *testing.T) {
+	// No canonical → raw symbol.
+	if got := canonicalSymbol(TickerMapping{Symbol: "AET", VendorMeta: map[string]any{}}); got != "AET" {
+		t.Errorf("no-canonical = %q, want AET", got)
+	}
+	// Canonical present → canonical wins.
+	m := TickerMapping{Symbol: "AET", VendorMeta: map[string]any{
+		"canonical": map[string]any{"symbol": "AET.L", "exch": "LSE"},
+	}}
+	if got := canonicalSymbol(m); got != "AET.L" {
+		t.Errorf("canonical = %q, want AET.L", got)
+	}
+	// Empty canonical symbol → fall back to raw.
+	m2 := TickerMapping{Symbol: "AET", VendorMeta: map[string]any{
+		"canonical": map[string]any{"symbol": "", "exch": "LSE"},
+	}}
+	if got := canonicalSymbol(m2); got != "AET" {
+		t.Errorf("empty-canonical = %q, want AET", got)
+	}
+}
+
+func TestSetSymbolsUsesCanonical(t *testing.T) {
+	mappings := []TickerMapping{
+		{InstrumentID: "AET", PortfolioID: "p", Symbol: "AET",
+			VendorMeta: map[string]any{"canonical": map[string]any{"symbol": "AET.L", "exch": "LSE"}}},
+	}
+	got := desiredSymbols(mappings)
+	if _, ok := got["AET.L"]; !ok {
+		t.Errorf("expected desired to contain canonical AET.L, got %v", got)
+	}
+	if _, ok := got["AET"]; ok {
+		t.Errorf("must not subscribe the raw ambiguous symbol AET")
+	}
+}

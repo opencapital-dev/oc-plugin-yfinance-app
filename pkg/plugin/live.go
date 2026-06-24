@@ -55,19 +55,39 @@ func (s *LiveSubscriber) Start(_ context.Context) error {
 	return nil
 }
 
-func (s *LiveSubscriber) SetSymbols(ctx context.Context, mappings []TickerMapping) {
-	desired := map[string]struct{}{}
-	bySymbol := map[string][]symbolTarget{}
+// canonicalSymbol returns the REST-resolved fully-qualified Yahoo symbol stored
+// at backfill in vendor_meta.canonical.symbol, falling back to the raw mapping
+// symbol until the first backfill resolves it. Subscribing the canonical form
+// makes the live ws resolve the same listing REST used.
+func canonicalSymbol(m TickerMapping) string {
+	if c, ok := m.VendorMeta["canonical"].(map[string]any); ok {
+		if s, ok := c["symbol"].(string); ok && s != "" {
+			return s
+		}
+	}
+	return m.Symbol
+}
+
+// desiredSymbols maps the upper-cased canonical Yahoo symbol → its targets.
+// Subscribing the canonical form keeps the ws and REST on the same listing.
+func desiredSymbols(mappings []TickerMapping) map[string][]symbolTarget {
+	out := map[string][]symbolTarget{}
 	for _, m := range mappings {
-		if m.Symbol == "" {
+		sym := canonicalSymbol(m)
+		if sym == "" {
 			continue
 		}
-		up := strings.ToUpper(m.Symbol)
+		up := strings.ToUpper(sym)
+		out[up] = append(out[up], symbolTarget{InstrumentID: m.InstrumentID, PortfolioID: m.PortfolioID})
+	}
+	return out
+}
+
+func (s *LiveSubscriber) SetSymbols(ctx context.Context, mappings []TickerMapping) {
+	bySymbol := desiredSymbols(mappings)
+	desired := make(map[string]struct{}, len(bySymbol))
+	for up := range bySymbol {
 		desired[up] = struct{}{}
-		bySymbol[up] = append(bySymbol[up], symbolTarget{
-			InstrumentID: m.InstrumentID,
-			PortfolioID:  m.PortfolioID,
-		})
 	}
 
 	s.mu.Lock()

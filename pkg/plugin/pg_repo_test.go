@@ -170,3 +170,38 @@ func TestListSubscribedTickerMappingsSQL(t *testing.T) {
 		t.Errorf("SQL missing WHERE subscribed: %s", sql)
 	}
 }
+
+func TestSetCanonicalIdentitySQL(t *testing.T) {
+	fc := &fakeClient{pgQueryResult: mappingResult("AET.L")}
+	app := makeAppWithFakeClient(fc)
+	if err := app.SetCanonicalIdentity(context.Background(), "instr-1", "port-1", "AET.L", "LSE"); err != nil {
+		t.Fatalf("SetCanonicalIdentity: %v", err)
+	}
+	if len(fc.pgExecCalls) != 1 {
+		t.Fatalf("expected 1 PGExec, got %d", len(fc.pgExecCalls))
+	}
+	sql := fc.pgExecCalls[0].sql
+	if !strings.Contains(sql, "instrument_ticker_mapping") || !strings.Contains(sql, "vendor_meta") {
+		t.Errorf("SQL missing table/vendor_meta: %s", sql)
+	}
+	var found bool
+	for _, a := range fc.pgExecCalls[0].args {
+		if s, ok := a.(string); ok && strings.Contains(s, `"canonical"`) && strings.Contains(s, `"AET.L"`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("vendor_meta arg missing canonical AET.L: %v", fc.pgExecCalls[0].args)
+	}
+}
+
+func TestSetCanonicalIdentityNoopOnEmpty(t *testing.T) {
+	fc := &fakeClient{pgQueryResult: mappingResult("AET.L")}
+	app := makeAppWithFakeClient(fc)
+	if err := app.SetCanonicalIdentity(context.Background(), "instr-1", "port-1", "", "LSE"); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(fc.pgExecCalls) != 0 {
+		t.Fatalf("empty symbol must be a no-op, got %d PGExec", len(fc.pgExecCalls))
+	}
+}

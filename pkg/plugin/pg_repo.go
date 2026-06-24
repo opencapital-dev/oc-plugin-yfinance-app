@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
@@ -206,4 +207,41 @@ func (a *App) ListTickerMappings(ctx context.Context) ([]TickerMapping, error) {
 		out = append(out, m)
 	}
 	return out, nil
+}
+
+// SetCanonicalIdentity records the REST-resolved canonical Yahoo identity for an
+// instrument under vendor_meta.canonical = {symbol, exch}. The live subscriber
+// reads symbol via canonicalSymbol() so it subscribes the same listing REST
+// resolved. Best-effort; a no-op when symbol is empty.
+func (a *App) SetCanonicalIdentity(ctx context.Context, instrumentID, portfolioID, symbol, exchange string) error {
+	if symbol == "" {
+		return nil
+	}
+	cur, err := a.GetTickerMapping(ctx, instrumentID, portfolioID)
+	if err != nil {
+		return err
+	}
+	meta := cur.VendorMeta
+	if meta == nil {
+		meta = map[string]any{}
+	}
+	meta["canonical"] = map[string]any{
+		"symbol": symbol,
+		"exch":   strings.ToUpper(strings.TrimSpace(exchange)),
+	}
+	metaJSON, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("marshal vendor_meta: %w", err)
+	}
+	_, err = a.client.PGExec(ctx, `
+		UPDATE yfinance.instrument_ticker_mapping
+		   SET vendor_meta = $1::jsonb,
+		       updated_at  = $2
+		 WHERE instrument_id = $3
+		   AND portfolio_id  = $4
+	`, string(metaJSON), nowMicros(), instrumentID, portfolioID)
+	if err != nil {
+		return fmt.Errorf("set canonical identity: %w", err)
+	}
+	return nil
 }

@@ -62,7 +62,7 @@ func runBackfillJob(
 
 	start := time.UnixMicro(job.StartTsUs).UTC()
 	end := time.UnixMicro(job.EndTsUs).UTC()
-	bars, rawCurrency, referencePrice, err := yf.FetchBars(ctx, symbol, job.BarSize, start, end)
+	bars, rawCurrency, resolvedSymbol, resolvedExchange, referencePrice, err := yf.FetchBars(ctx, symbol, job.BarSize, start, end)
 	if err != nil {
 		log.DefaultLogger.Warn("backfill: fetch bars failed",
 			"instrument_id", job.InstrumentID, "portfolio_id", job.PortfolioID,
@@ -128,6 +128,11 @@ func runBackfillJob(
 	}
 
 	state.MarkFinished(job, "done", published, "", nowMicros())
+	if cerr := app.SetCanonicalIdentity(ctx, job.InstrumentID, job.PortfolioID, resolvedSymbol, resolvedExchange); cerr != nil {
+		log.DefaultLogger.Warn("set canonical identity failed",
+			"instrument_id", job.InstrumentID, "portfolio_id", job.PortfolioID,
+			"resolved_symbol", resolvedSymbol, "err", cerr)
+	}
 	log.DefaultLogger.Info("backfill done",
 		"instrument_id", job.InstrumentID,
 		"portfolio_id", job.PortfolioID,
