@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 )
 
@@ -59,6 +60,10 @@ func (a *App) handleSettings(w http.ResponseWriter, r *http.Request) {
 
 // handleTestFred verifies the stored key against a trivial FRED endpoint.
 func (a *App) handleTestFred(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 	ctx := r.Context()
 	res, err := a.client.PGQuery(ctx,
 		`SELECT value FROM basic_data.app_settings WHERE key = $1`, "fred_api_key")
@@ -73,7 +78,7 @@ func (a *App) handleTestFred(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); resp.Body.Close() }()
 	writeJSON(w, map[string]any{"ok": resp.StatusCode == 200, "status": resp.StatusCode})
 }
 

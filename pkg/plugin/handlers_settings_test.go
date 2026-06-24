@@ -52,3 +52,13 @@ func TestGetSettingsReportsKeyPresenceNotValue(t *testing.T) {
 		t.Error("must not return the key value")
 	}
 }
+
+func TestTestFredRejectsNonPost(t *testing.T) {
+	app := makeAppWithFakeClient(&fakeClient{})
+	req := httptest.NewRequest("GET", "/settings/test-fred", nil)
+	rec := httptest.NewRecorder()
+	app.handleTestFred(rec, req)
+	if rec.Code != 405 {
+		t.Fatalf("want 405, got %d", rec.Code)
+	}
+}
