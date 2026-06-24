@@ -1,0 +1,275 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Inflation",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "CPI YoY — $country",
+      "repeat": "country",
+      "repeatDirection": "h",
+      "maxPerRow": 4,
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 1 },
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": true,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "ref": "basic-data-app/cpi_yoy"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Growth",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "GDP YoY — $country",
+      "repeat": "country",
+      "repeatDirection": "h",
+      "maxPerRow": 4,
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 10 },
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": true,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "ref": "basic-data-app/gdp_yoy"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Labor",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Unemployment — $country",
+      "repeat": "country",
+      "repeatDirection": "h",
+      "maxPerRow": 4,
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 19 },
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": true,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "ref": "basic-data-app/unemployment"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Policy",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 }
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Policy Rate — $country",
+      "repeat": "country",
+      "repeatDirection": "h",
+      "maxPerRow": 4,
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 28 },
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": true,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "ref": "basic-data-app/policy_rate"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Yields",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 }
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "10Y Yield — $country",
+      "repeat": "country",
+      "repeatDirection": "h",
+      "maxPerRow": 4,
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 37 },
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": true,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "ref": "basic-data-app/yield_10y"
+        }
+      ]
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 41,
+  "tags": ["yfinance", "macro", "world"],
+  "templating": {
+    "list": [
+      {
+        "name": "country",
+        "label": "Country",
+        "type": "custom",
+        "multi": true,
+        "includeAll": false,
+        "query": "US,EA,GB,JP,CN",
+        "current": {
+          "text": ["US"],
+          "value": ["US"]
+        },
+        "options": [
+          { "text": "US", "value": "US", "selected": true },
+          { "text": "EA", "value": "EA", "selected": false },
+          { "text": "GB", "value": "GB", "selected": false },
+          { "text": "JP", "value": "JP", "selected": false },
+          { "text": "CN", "value": "CN", "selected": false }
+        ]
+      }
+    ]
+  },
+  "time": {
+    "from": "now-10y",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "World Macro",
+  "uid": "basic-data-world-macro"
+}

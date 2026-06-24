@@ -1,0 +1,56 @@
+{
+  "datasource": {
+    "type": "core-datasource",
+    "uid": "core-datasource"
+  },
+  "description": "Yield curve slope (10Y minus 2Y spread) for $country.",
+  "fieldConfig": {
+    "defaults": {
+      "unit": "percent",
+      "decimals": 2,
+      "color": {
+        "mode": "palette-classic"
+      },
+      "custom": {
+        "lineWidth": 2,
+        "fillOpacity": 10,
+        "gradientMode": "none",
+        "showPoints": "never",
+        "spanNulls": true,
+        "axisPlacement": "auto",
+        "axisLabel": "pp",
+        "hideFrom": {
+          "tooltip": false,
+          "viz": false,
+          "legend": false
+        }
+      }
+    },
+    "overrides": []
+  },
+  "options": {
+    "legend": {
+      "displayMode": "list",
+      "placement": "bottom",
+      "showLegend": true,
+      "calcs": []
+    },
+    "tooltip": {
+      "mode": "multi",
+      "sort": "none"
+    }
+  },
+  "targets": [
+    {
+      "refId": "A",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "ref": "basic-data-app/curve_slope"
+    }
+  ],
+  "title": "Curve Slope (10Y-2Y) — $country",
+  "type": "timeseries",
+  "uid": "basic-data-curve_slope"
+}

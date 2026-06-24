@@ -1,0 +1,56 @@
+{
+  "datasource": {
+    "type": "core-datasource",
+    "uid": "core-datasource"
+  },
+  "description": "Unemployment rate for $country.",
+  "fieldConfig": {
+    "defaults": {
+      "unit": "percent",
+      "decimals": 2,
+      "color": {
+        "mode": "palette-classic"
+      },
+      "custom": {
+        "lineWidth": 2,
+        "fillOpacity": 10,
+        "gradientMode": "none",
+        "showPoints": "never",
+        "spanNulls": true,
+        "axisPlacement": "auto",
+        "axisLabel": "%",
+        "hideFrom": {
+          "tooltip": false,
+          "viz": false,
+          "legend": false
+        }
+      }
+    },
+    "overrides": []
+  },
+  "options": {
+    "legend": {
+      "displayMode": "list",
+      "placement": "bottom",
+      "showLegend": true,
+      "calcs": []
+    },
+    "tooltip": {
+      "mode": "multi",
+      "sort": "none"
+    }
+  },
+  "targets": [
+    {
+      "refId": "A",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "ref": "basic-data-app/unemployment"
+    }
+  ],
+  "title": "Unemployment Rate — $country",
+  "type": "timeseries",
+  "uid": "basic-data-unemployment"
+}
