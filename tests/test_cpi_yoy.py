@@ -20,8 +20,10 @@ def assert_ts_contract(df):
     json.dumps([list(r) for r in df.rows()])  # raises on datetime / non-JSON cells
 
 
-def _run(source: str, country: str, fake_fetch, fake_sql):
-    src = source.replace("$country", country)
+def _run(source: str, country_csv: str, fake_fetch, fake_sql):
+    # Grafana interpolates ${country:csv} to e.g. "US,EA"; the metric returns one
+    # column per country.
+    src = source.replace("${country:csv}", country_csv)
     captured = {}
     def metric(*, output):
         def deco(fn): captured["fn"] = fn; captured["output"] = output; return fn
@@ -49,5 +51,7 @@ def test_cpi_yoy_us_uses_fred_and_computes_yoy():
                                  for i, m in enumerate(range(1, 13))]
                 + [{"date": "2024-01-01", "value": "112"}]}
     df = _run(src, "US", fake_fetch, fake_sql)
-    assert abs(df.sort("ts")["value"][-1] - 12.0) < 1e-6
+    # wide frame: one column per selected country
+    assert df.columns == ["ts", "US"]
+    assert abs(df.sort("ts")["US"][-1] - 12.0) < 1e-6
     assert_ts_contract(df)

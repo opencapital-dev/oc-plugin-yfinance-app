@@ -14,7 +14,7 @@ def test_unemployment_us_passthrough_level():
                                  {"date": "2024-02-01", "value": "3.9"}]}
 
     df = _run(src, "US", fetch, _sql_key)
-    assert df.sort("ts")["value"][-1] == 3.9
+    assert df.sort("ts")["US"][-1] == 3.9
     assert_ts_contract(df)
 
 
@@ -28,5 +28,5 @@ def test_curve_slope_us_is_10y_minus_2y():
         return {"observations": [{"date": "2024-01-01", "value": v}]}
 
     df = _run(src, "US", fetch, _sql_key)
-    assert abs(df["value"][0] - (-0.5)) < 1e-9
+    assert abs(df["US"][0] - (-0.5)) < 1e-9
     assert_ts_contract(df)

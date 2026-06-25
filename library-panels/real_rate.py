@@ -35,6 +35,27 @@ def _yoy(df, periods):  # periods: 12 monthly, 4 quarterly
               .with_columns((pl.col("value") / pl.col("value").shift(periods) * 100 - 100).alias("value"))
               .drop_nulls())
 
+
+def _selected(series_map):
+    # ${country:csv} is interpolated by Grafana to e.g. "US,EA,GB". Keep known codes;
+    # fall back to all if interpolation did not run.
+    raw = "${country:csv}"
+    sel = [c.strip() for c in raw.replace("{", "").replace("}", "").split(",")]
+    sel = [c for c in sel if c in series_map]
+    return sel or list(series_map.keys())
+
+
+def _wide(series_map, build):
+    # One value column per selected country (named by code); skip a failing country.
+    out = None
+    for c in _selected(series_map):
+        try:
+            df = build(c).select("ts", pl.col("value").alias(c))
+        except Exception:
+            continue
+        out = df if out is None else out.join(df, on="ts", how="full", coalesce=True)
+    return (out if out is not None else pl.DataFrame({"ts": []}, schema={"ts": pl.Int64})).sort("ts")
+
 POLICY = {"US": ("fred", "DFF"), "EA": ("dbnomics", "ECB/FM/D.U2.EUR.4F.KR.MRR_FR.LEV"),
           "GB": ("dbnomics", "BIS/WS_CBPOL/D.GB"),   # was BOE/IUDBEDR/IUDBEDR (404)
           "JP": ("dbnomics", "BIS/WS_CBPOL/D.JP"),   # was BIS/cbpol/D.JP (404; dataset renamed WS_CBPOL)
@@ -46,7 +67,8 @@ CPI = {"US": ("fred", "CPIAUCSL"), "EA": ("dbnomics", "Eurostat/prc_hicp_midx/M.
 
 @metric(output="series")
 def real_rate():
-    pol = _series(*POLICY["$country"]).sort("ts").rename({"value": "pol"})
-    infl = _yoy(_series(*CPI["$country"]), 12).sort("ts").rename({"value": "cpi"})
-    j = pol.join_asof(infl, on="ts")  # nearest prior CPI for each rate point
-    return j.with_columns((pl.col("pol") - pl.col("cpi")).alias("value")).select("ts", "value").drop_nulls()
+    return _wide(POLICY, lambda c: (
+        _series(*POLICY[c]).sort("ts").rename({"value": "pol"})
+        .join_asof(_yoy(_series(*CPI[c]), 12).sort("ts").rename({"value": "cpi"}), on="ts")
+        .with_columns((pl.col("pol") - pl.col("cpi")).alias("value"))
+        .select("ts", "value").drop_nulls()))

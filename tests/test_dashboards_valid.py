@@ -59,19 +59,20 @@ def test_every_target_has_a_valid_ref_or_inline_source():
                 )
 
 
-def test_macro_dashboards_have_per_country_panels():
-    for name in ("world-macro.json", "macro-compare.json"):
-        path = ROOT / "dashboards" / name
-        assert path.exists(), f"dashboards/{name} not found"
-        with open(path) as fh:
-            d = json.load(fh)
-        countries = {
-            p["title"].rsplit("—", 1)[-1].strip()
-            for p in d.get("panels", [])
-            if p.get("type") != "row" and "—" in p.get("title", "")
-        }
-        # Each metric is rendered once per country -> per-country panels exist.
-        assert {"US", "EA", "GB", "JP"} <= countries, (
-            f"{name}: expected per-country panels (US/EA/GB/JP), got {countries}"
+def test_single_macro_dashboard_with_country_var_and_inline_sources():
+    path = ROOT / "dashboards" / "macro.json"
+    assert path.exists(), "dashboards/macro.json not found"
+    with open(path) as fh:
+        d = json.load(fh)
+
+    var_names = {v["name"] for v in d.get("templating", {}).get("list", [])}
+    assert "country" in var_names, f"macro.json missing 'country' variable; got {var_names}"
+
+    panels = [p for p in d.get("panels", []) if p.get("type") != "row"]
+    assert len(panels) >= 5, f"expected >=5 metric panels, got {len(panels)}"
+    for p in panels:
+        src = (p.get("targets", [{}])[0].get("source") or "")
+        # each panel renders all selected countries from the dropdown via ${country:csv}
+        assert "${country:csv}" in src and "@metric" in src, (
+            f"panel '{p.get('title')}' is not a multi-country inline @metric source"
         )
-        assert countries <= COUNTRIES, f"{name}: unexpected country in titles: {countries}"

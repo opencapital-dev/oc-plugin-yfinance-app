@@ -35,6 +35,27 @@ def _yoy(df, periods):  # periods: 12 monthly, 4 quarterly
               .with_columns((pl.col("value") / pl.col("value").shift(periods) * 100 - 100).alias("value"))
               .drop_nulls())
 
+
+def _selected(series_map):
+    # ${country:csv} is interpolated by Grafana to e.g. "US,EA,GB". Keep known codes;
+    # fall back to all if interpolation did not run.
+    raw = "${country:csv}"
+    sel = [c.strip() for c in raw.replace("{", "").replace("}", "").split(",")]
+    sel = [c for c in sel if c in series_map]
+    return sel or list(series_map.keys())
+
+
+def _wide(series_map, build):
+    # One value column per selected country (named by code); skip a failing country.
+    out = None
+    for c in _selected(series_map):
+        try:
+            df = build(c).select("ts", pl.col("value").alias(c))
+        except Exception:
+            continue
+        out = df if out is None else out.join(df, on="ts", how="full", coalesce=True)
+    return (out if out is not None else pl.DataFrame({"ts": []}, schema={"ts": pl.Int64})).sort("ts")
+
 SERIES = {
     "US": ("fred", "DFF"),
     "EA": ("dbnomics", "ECB/FM/D.U2.EUR.4F.KR.MRR_FR.LEV"),
@@ -45,4 +66,4 @@ SERIES = {
 
 @metric(output="series")
 def policy_rate():
-    p, c = SERIES["$country"]; return _series(p, c).select("ts", "value")
+    return _wide(SERIES, lambda c: _series(*SERIES[c]))

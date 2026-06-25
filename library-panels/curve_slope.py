@@ -35,6 +35,27 @@ def _yoy(df, periods):  # periods: 12 monthly, 4 quarterly
               .with_columns((pl.col("value") / pl.col("value").shift(periods) * 100 - 100).alias("value"))
               .drop_nulls())
 
+
+def _selected(series_map):
+    # ${country:csv} is interpolated by Grafana to e.g. "US,EA,GB". Keep known codes;
+    # fall back to all if interpolation did not run.
+    raw = "${country:csv}"
+    sel = [c.strip() for c in raw.replace("{", "").replace("}", "").split(",")]
+    sel = [c for c in sel if c in series_map]
+    return sel or list(series_map.keys())
+
+
+def _wide(series_map, build):
+    # One value column per selected country (named by code); skip a failing country.
+    out = None
+    for c in _selected(series_map):
+        try:
+            df = build(c).select("ts", pl.col("value").alias(c))
+        except Exception:
+            continue
+        out = df if out is None else out.join(df, on="ts", how="full", coalesce=True)
+    return (out if out is not None else pl.DataFrame({"ts": []}, schema={"ts": pl.Int64})).sort("ts")
+
 TEN = {"US": ("fred", "DGS10"), "EA": ("dbnomics", "Eurostat/irt_lt_mcby_d/D.MCBY.EA"),  # was D.EA (404; series code is D.MCBY.EA)
        "GB": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/GBR.M.IRLT.PA._Z._Z._Z._Z.N"),   # was OECD/MEI_FIN/IRLT.GBR.M (dataset renamed)
        "JP": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/JPN.M.IRLT.PA._Z._Z._Z._Z.N"),   # was OECD/MEI_FIN/IRLT.JPN.M
@@ -46,7 +67,8 @@ TWO = {"US": ("fred", "DGS2"), "EA": ("dbnomics", "Eurostat/irt_st_m/M.IRT_M3.EA
 
 @metric(output="series")
 def curve_slope():
-    ten = _series(*TEN["$country"]).sort("ts").rename({"value": "ten"})
-    two = _series(*TWO["$country"]).sort("ts").rename({"value": "two"})
-    j = ten.join_asof(two, on="ts")
-    return j.with_columns((pl.col("ten") - pl.col("two")).alias("value")).select("ts", "value").drop_nulls()
+    return _wide(TEN, lambda c: (
+        _series(*TEN[c]).sort("ts").rename({"value": "ten"})
+        .join_asof(_series(*TWO[c]).sort("ts").rename({"value": "two"}), on="ts")
+        .with_columns((pl.col("ten") - pl.col("two")).alias("value"))
+        .select("ts", "value").drop_nulls()))
