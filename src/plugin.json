@@ -46,7 +46,8 @@
     "updated": "%TODAY%"
   },
   "includes": [
-    { "type": "page", "name": "Tickers", "path": "/a/%PLUGIN_ID%/tickers", "addToNav": true, "defaultNav": true, "icon": "chart-line" },
+    { "type": "page", "name": "Overview", "path": "/a/%PLUGIN_ID%/overview", "addToNav": true, "defaultNav": true, "icon": "home-alt" },
+    { "type": "page", "name": "Instruments", "path": "/a/%PLUGIN_ID%/instruments", "addToNav": true, "icon": "chart-line" },
     { "type": "page", "name": "Settings", "path": "/a/%PLUGIN_ID%/settings", "addToNav": true, "icon": "cog" }
   ],
   "dependencies": {

@@ -14,6 +14,9 @@ jest.mock('@grafana/runtime', () => ({
       if (url.includes('/settings')) {
         return Promise.resolve({ fred_api_key_set: false, pollIntervalSec: 15, qps: 1, burst: 3, liveEnable: true, backfillEnable: true });
       }
+      if (url.includes('/overview')) {
+        return Promise.resolve({ held_equities: 0, held_options: 0, option_underlyings: 0, last_option_mark_us: 0 });
+      }
       return Promise.resolve([]);
     }),
     post: jest.fn().mockResolvedValue({}),
@@ -42,14 +45,26 @@ describe('Components/App', () => {
     } as unknown as AppRootProps;
   });
 
-  test('renders the Tickers route by default', async () => {
+  test('renders the Instruments route by default', async () => {
     const { queryAllByText } = render(
-      <MemoryRouter initialEntries={['/tickers']}>
+      <MemoryRouter initialEntries={['/instruments']}>
         <App {...props} />
       </MemoryRouter>
     );
-    // The Tickers page renders a heading or empty-state we can wait on.
+    // The Instruments page renders a heading or empty-state we can wait on.
     await waitFor(() => expect(queryAllByText(/instruments|tickers|Yahoo/i).length).toBeGreaterThan(0), {
+      timeout: 2000,
+    });
+  });
+
+  test('redirects unknown routes to Overview', async () => {
+    render(
+      <MemoryRouter initialEntries={['/unknown-route']}>
+        <App {...props} />
+      </MemoryRouter>
+    );
+    // Overview page renders an "Overview" heading
+    await waitFor(() => expect(screen.queryAllByText(/overview|holdings|option marks/i).length).toBeGreaterThan(0), {
       timeout: 2000,
     });
   });
