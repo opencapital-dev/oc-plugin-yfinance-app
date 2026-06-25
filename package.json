@@ -73,8 +73,6 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint --cache .",
     "lint:fix": "npm run lint -- --fix \u0026\u0026 prettier --write --list-different .",
-    "e2e": "playwright test",
-    "server": "docker compose up --build",
     "sign": "npx --yes @grafana/sign-plugin@latest"
   },
   "version": "1.0.16"
