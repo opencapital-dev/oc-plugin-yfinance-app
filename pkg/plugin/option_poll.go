@@ -118,6 +118,9 @@ func readOptionPollSettings(ctx context.Context, client rwPGClient) (bool, int) 
 		return enable, interval
 	}
 	for _, row := range res.Rows {
+		if len(row) < 2 {
+			continue
+		}
 		k := rwString(row[0])
 		v := rwString(row[1])
 		switch k {

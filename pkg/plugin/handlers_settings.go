@@ -1,18 +1,32 @@
 package plugin
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 )
 
 type settingsPayload struct {
-	FredAPIKey      *string  `json:"fred_api_key,omitempty"`
-	PollIntervalSec *int     `json:"pollIntervalSec,omitempty"`
-	QPS             *float64 `json:"qps,omitempty"`
-	Burst           *int     `json:"burst,omitempty"`
-	LiveEnable      *bool    `json:"liveEnable,omitempty"`
-	BackfillEnable  *bool    `json:"backfillEnable,omitempty"`
+	FredAPIKey            *string  `json:"fred_api_key,omitempty"`
+	PollIntervalSec       *int     `json:"pollIntervalSec,omitempty"`
+	QPS                   *float64 `json:"qps,omitempty"`
+	Burst                 *int     `json:"burst,omitempty"`
+	LiveEnable            *bool    `json:"liveEnable,omitempty"`
+	BackfillEnable        *bool    `json:"backfillEnable,omitempty"`
+	OptionPollEnable      *bool    `json:"optionPollEnable,omitempty"`
+	OptionPollIntervalSec *int     `json:"optionPollIntervalSec,omitempty"`
+}
+
+type optionPollBody struct {
+	Enable      bool
+	IntervalSec int
+}
+
+func optionPollSettings(ctx context.Context, client rwPGClient) optionPollBody {
+	enable, interval := readOptionPollSettings(ctx, client)
+	return optionPollBody{Enable: enable, IntervalSec: interval}
 }
 
 func (a *App) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -26,13 +40,16 @@ func (a *App) handleSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		set := len(res.Rows) > 0 && res.Rows[0][0] != nil && res.Rows[0][0] != ""
+		op := optionPollSettings(ctx, a.client)
 		writeJSON(w, map[string]any{
-			"fred_api_key_set": set,
-			"pollIntervalSec":  a.options.DiscoveryPollSec,
-			"qps":              a.options.YfinanceQPS,
-			"burst":            a.options.YfinanceBurst,
-			"liveEnable":       a.options.LiveEnable,
-			"backfillEnable":   a.options.BackfillEnable,
+			"fred_api_key_set":      set,
+			"pollIntervalSec":       a.options.DiscoveryPollSec,
+			"qps":                   a.options.YfinanceQPS,
+			"burst":                 a.options.YfinanceBurst,
+			"liveEnable":            a.options.LiveEnable,
+			"backfillEnable":        a.options.BackfillEnable,
+			"optionPollEnable":      op.Enable,
+			"optionPollIntervalSec": op.IntervalSec,
 		})
 	case http.MethodPut:
 		var p settingsPayload
@@ -50,8 +67,30 @@ func (a *App) handleSettings(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		if p.OptionPollEnable != nil {
+			val := "true"
+			if !*p.OptionPollEnable {
+				val = "false"
+			}
+			if _, err := a.client.PGExec(ctx,
+				`INSERT INTO basic_data.app_settings (key, value, updated_at) VALUES ($1, $2, now())
+				 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+				"option_poll_enable", val); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		if p.OptionPollIntervalSec != nil {
+			if _, err := a.client.PGExec(ctx,
+				`INSERT INTO basic_data.app_settings (key, value, updated_at) VALUES ($1, $2, now())
+				 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+				"option_poll_interval_sec", strconv.Itoa(*p.OptionPollIntervalSec)); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
 		// poll/qps/burst/toggles persist to jsonData via the existing config path;
-		// here we only persist the FRED key. Echo success.
+		// here we only persist the FRED key and option-poll settings. Echo success.
 		writeJSON(w, map[string]any{"ok": true})
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
