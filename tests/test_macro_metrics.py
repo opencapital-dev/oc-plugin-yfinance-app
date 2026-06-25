@@ -18,14 +18,13 @@ def test_unemployment_us_passthrough_level():
     assert_ts_contract(df)
 
 
-def test_curve_slope_us_is_10y_minus_2y():
+def test_curve_slope_us_is_10y_minus_3m():
+    # Now uniform OECD DBnomics: 10Y (IRLT) - 3M (IR3TIB).
     src = (LIBRARY_PANELS / "curve_slope.py").read_text()
-    calls = {"n": 0}
 
     def fetch(url, **kw):
-        calls["n"] += 1
-        v = "4.0" if "DGS10" in str(kw.get("params")) else "4.5"
-        return {"observations": [{"date": "2024-01-01", "value": v}]}
+        val = 4.0 if "IRLT" in url else 4.5  # 10Y vs 3M
+        return {"series": {"docs": [{"period_start_day": ["2024-01-01"], "value": [val]}]}}
 
     df = _run(src, "US", fetch, _sql_key)
     assert abs(df["US"][0] - (-0.5)) < 1e-9

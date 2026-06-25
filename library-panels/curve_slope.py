@@ -56,14 +56,14 @@ def _wide(series_map, build):
         out = df if out is None else out.join(df, on="ts", how="full", coalesce=True)
     return (out if out is not None else pl.DataFrame({"ts": []}, schema={"ts": pl.Int64})).sort("ts")
 
-TEN = {"US": ("fred", "DGS10"), "EA": ("dbnomics", "Eurostat/irt_lt_mcby_d/D.MCBY.EA"),  # was D.EA (404; series code is D.MCBY.EA)
-       "GB": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/GBR.M.IRLT.PA._Z._Z._Z._Z.N"),   # was OECD/MEI_FIN/IRLT.GBR.M (dataset renamed)
-       "JP": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/JPN.M.IRLT.PA._Z._Z._Z._Z.N"),   # was OECD/MEI_FIN/IRLT.JPN.M
-       "CN": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/CHN.M.IRLT.PA._Z._Z._Z._Z.N")}   # was OECD/MEI_FIN/IRLT.CHN.M
-TWO = {"US": ("fred", "DGS2"), "EA": ("dbnomics", "Eurostat/irt_st_m/M.IRT_M3.EA"),
-       "GB": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/GBR.M.IR3TIB.PA._Z._Z._Z._Z.N"), # was OECD/MEI_FIN/IR3TIB.GBR.M
-       "JP": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/JPN.M.IR3TIB.PA._Z._Z._Z._Z.N"), # was OECD/MEI_FIN/IR3TIB.JPN.M
-       "CN": ("dbnomics", "OECD/DSD_STES@DF_FINMARK/CHN.M.IR3TIB.PA._Z._Z._Z._Z.N")} # was OECD/MEI_FIN/IR3TIB.CHN.M
+# Slope = 10Y long-term gov bond (IRLT) - 3M interbank (IR3TIB), all from OECD
+# DSD_STES so every country is the SAME source/maturities/frequency (comparable).
+# A uniform cross-country 2Y is not available on DBnomics; 10Y-3M is the closest
+# comparable term spread. ISO: US=USA, EA=EA20, GB=GBR, JP=JPN, CN=CHN.
+_OECD_FIN = "OECD/DSD_STES@DF_FINMARK/{iso}.M.{ind}.PA._Z._Z._Z._Z.N"
+_ISO = {"US": "USA", "EA": "EA20", "GB": "GBR", "JP": "JPN", "CN": "CHN"}
+TEN = {c: ("dbnomics", _OECD_FIN.format(iso=iso, ind="IRLT")) for c, iso in _ISO.items()}
+TWO = {c: ("dbnomics", _OECD_FIN.format(iso=iso, ind="IR3TIB")) for c, iso in _ISO.items()}
 
 @metric(output="series")
 def curve_slope():
