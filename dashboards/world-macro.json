@@ -1,43 +1,45 @@
 {
-  "annotations": {
+  "uid": "basic-data-world-macro",
+  "title": "World Macro",
+  "tags": [
+    "basic-data",
+    "macro"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "time": {
+    "from": "now-10y",
+    "to": "now"
+  },
+  "templating": {
     "list": []
   },
   "panels": [
     {
       "id": 1,
       "type": "row",
-      "title": "Inflation",
+      "title": "Inflation \u2014 CPI YoY",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
     },
     {
       "id": 2,
+      "title": "CPI YoY \u2014 US",
       "type": "timeseries",
-      "title": "CPI YoY — $country",
-      "repeat": "country",
-      "repeatDirection": "h",
-      "maxPerRow": 4,
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 1 },
       "datasource": {
         "type": "core-datasource",
         "uid": "core-datasource"
       },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 2,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "spanNulls": true,
-            "showPoints": "never"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
-        "tooltip": { "mode": "multi", "sort": "none" }
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 8
       },
       "targets": [
         {
@@ -46,45 +48,258 @@
             "type": "core-datasource",
             "uid": "core-datasource"
           },
-          "ref": "basic-data-app/cpi_yoy"
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\n# country -> (provider, series), monthly CPI index (YoY computed below)\nSERIES = {\n    \"US\": (\"fred\", \"CPIAUCSL\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/prc_hicp_midx/M.I15.CP00.EA\"),\n    \"GB\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/GBR.M.HICP.CPI.IX._T.N._Z\"),  # was OECD/PRICES_CPI/GBR.CPALTT01.IXOB.M (404; MEI_FIN replaced by DSD_G20_PRICES)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/JPN.M.N.CPI.IX._T.N._Z\"),      # was OECD/PRICES_CPI/JPN.CPALTT01.IXOB.M\n    \"CN\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/CHN.M.N.CPI.IX._T.N._Z\"),      # was OECD/PRICES_CPI/CHN.CPALTT01.IXOB.M\n}\n\n@metric(output=\"series\")\ndef cpi_yoy():\n    provider, code = SERIES[\"US\"]\n    return _yoy(_series(provider, code), 12).select(\"ts\", \"value\")\n"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "CPI YoY \u2014 EA",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 5,
+        "y": 1,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\n# country -> (provider, series), monthly CPI index (YoY computed below)\nSERIES = {\n    \"US\": (\"fred\", \"CPIAUCSL\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/prc_hicp_midx/M.I15.CP00.EA\"),\n    \"GB\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/GBR.M.HICP.CPI.IX._T.N._Z\"),  # was OECD/PRICES_CPI/GBR.CPALTT01.IXOB.M (404; MEI_FIN replaced by DSD_G20_PRICES)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/JPN.M.N.CPI.IX._T.N._Z\"),      # was OECD/PRICES_CPI/JPN.CPALTT01.IXOB.M\n    \"CN\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/CHN.M.N.CPI.IX._T.N._Z\"),      # was OECD/PRICES_CPI/CHN.CPALTT01.IXOB.M\n}\n\n@metric(output=\"series\")\ndef cpi_yoy():\n    provider, code = SERIES[\"EA\"]\n    return _yoy(_series(provider, code), 12).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "CPI YoY \u2014 GB",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 1,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\n# country -> (provider, series), monthly CPI index (YoY computed below)\nSERIES = {\n    \"US\": (\"fred\", \"CPIAUCSL\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/prc_hicp_midx/M.I15.CP00.EA\"),\n    \"GB\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/GBR.M.HICP.CPI.IX._T.N._Z\"),  # was OECD/PRICES_CPI/GBR.CPALTT01.IXOB.M (404; MEI_FIN replaced by DSD_G20_PRICES)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/JPN.M.N.CPI.IX._T.N._Z\"),      # was OECD/PRICES_CPI/JPN.CPALTT01.IXOB.M\n    \"CN\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/CHN.M.N.CPI.IX._T.N._Z\"),      # was OECD/PRICES_CPI/CHN.CPALTT01.IXOB.M\n}\n\n@metric(output=\"series\")\ndef cpi_yoy():\n    provider, code = SERIES[\"GB\"]\n    return _yoy(_series(provider, code), 12).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "CPI YoY \u2014 JP",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 1,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\n# country -> (provider, series), monthly CPI index (YoY computed below)\nSERIES = {\n    \"US\": (\"fred\", \"CPIAUCSL\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/prc_hicp_midx/M.I15.CP00.EA\"),\n    \"GB\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/GBR.M.HICP.CPI.IX._T.N._Z\"),  # was OECD/PRICES_CPI/GBR.CPALTT01.IXOB.M (404; MEI_FIN replaced by DSD_G20_PRICES)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/JPN.M.N.CPI.IX._T.N._Z\"),      # was OECD/PRICES_CPI/JPN.CPALTT01.IXOB.M\n    \"CN\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/CHN.M.N.CPI.IX._T.N._Z\"),      # was OECD/PRICES_CPI/CHN.CPALTT01.IXOB.M\n}\n\n@metric(output=\"series\")\ndef cpi_yoy():\n    provider, code = SERIES[\"JP\"]\n    return _yoy(_series(provider, code), 12).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "CPI YoY \u2014 CN",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\n# country -> (provider, series), monthly CPI index (YoY computed below)\nSERIES = {\n    \"US\": (\"fred\", \"CPIAUCSL\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/prc_hicp_midx/M.I15.CP00.EA\"),\n    \"GB\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/GBR.M.HICP.CPI.IX._T.N._Z\"),  # was OECD/PRICES_CPI/GBR.CPALTT01.IXOB.M (404; MEI_FIN replaced by DSD_G20_PRICES)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/JPN.M.N.CPI.IX._T.N._Z\"),      # was OECD/PRICES_CPI/JPN.CPALTT01.IXOB.M\n    \"CN\": (\"dbnomics\", \"OECD/DSD_G20_PRICES@DF_G20_PRICES/CHN.M.N.CPI.IX._T.N._Z\"),      # was OECD/PRICES_CPI/CHN.CPALTT01.IXOB.M\n}\n\n@metric(output=\"series\")\ndef cpi_yoy():\n    provider, code = SERIES[\"CN\"]\n    return _yoy(_series(provider, code), 12).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "row",
+      "title": "Growth \u2014 GDP YoY",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 8,
+      "title": "GDP YoY \u2014 US",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"GDPC1\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/namq_10_gdp/Q.CLV10_MEUR.SCA.B1GQ.EA19\"),\n    \"GB\": (\"dbnomics\", \"OECD/QNA/GBR.B1_GE.LNBQRSA.Q\"),\n    \"JP\": (\"dbnomics\", \"OECD/QNA/JPN.B1_GE.LNBQRSA.Q\"),\n    # UNRESOLVED: China is not in OECD/QNA. NBS/Q_A0102/A010201 provides constant-price quarterly\n    # levels but with sparse history (2024+); NBS/Q_A0103/A010301 gives YoY index (preceding\n    # year=100) which would need different handling than _yoy(). Operator must decide approach.\n    \"CN\": (\"dbnomics\", \"OECD/QNA/CHN.B1_GE.LNBQRSA.Q\"),\n}\n\n@metric(output=\"series\")\ndef gdp_yoy():\n    p, c = SERIES[\"US\"]; return _yoy(_series(p, c), 4).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "title": "GDP YoY \u2014 EA",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 5,
+        "y": 10,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"GDPC1\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/namq_10_gdp/Q.CLV10_MEUR.SCA.B1GQ.EA19\"),\n    \"GB\": (\"dbnomics\", \"OECD/QNA/GBR.B1_GE.LNBQRSA.Q\"),\n    \"JP\": (\"dbnomics\", \"OECD/QNA/JPN.B1_GE.LNBQRSA.Q\"),\n    # UNRESOLVED: China is not in OECD/QNA. NBS/Q_A0102/A010201 provides constant-price quarterly\n    # levels but with sparse history (2024+); NBS/Q_A0103/A010301 gives YoY index (preceding\n    # year=100) which would need different handling than _yoy(). Operator must decide approach.\n    \"CN\": (\"dbnomics\", \"OECD/QNA/CHN.B1_GE.LNBQRSA.Q\"),\n}\n\n@metric(output=\"series\")\ndef gdp_yoy():\n    p, c = SERIES[\"EA\"]; return _yoy(_series(p, c), 4).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 10,
-      "type": "row",
-      "title": "Growth",
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 }
+      "title": "GDP YoY \u2014 GB",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 10,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"GDPC1\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/namq_10_gdp/Q.CLV10_MEUR.SCA.B1GQ.EA19\"),\n    \"GB\": (\"dbnomics\", \"OECD/QNA/GBR.B1_GE.LNBQRSA.Q\"),\n    \"JP\": (\"dbnomics\", \"OECD/QNA/JPN.B1_GE.LNBQRSA.Q\"),\n    # UNRESOLVED: China is not in OECD/QNA. NBS/Q_A0102/A010201 provides constant-price quarterly\n    # levels but with sparse history (2024+); NBS/Q_A0103/A010301 gives YoY index (preceding\n    # year=100) which would need different handling than _yoy(). Operator must decide approach.\n    \"CN\": (\"dbnomics\", \"OECD/QNA/CHN.B1_GE.LNBQRSA.Q\"),\n}\n\n@metric(output=\"series\")\ndef gdp_yoy():\n    p, c = SERIES[\"GB\"]; return _yoy(_series(p, c), 4).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 11,
+      "title": "GDP YoY \u2014 JP",
       "type": "timeseries",
-      "title": "GDP YoY — $country",
-      "repeat": "country",
-      "repeatDirection": "h",
-      "maxPerRow": 4,
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 10 },
       "datasource": {
         "type": "core-datasource",
         "uid": "core-datasource"
       },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 2,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "spanNulls": true,
-            "showPoints": "never"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
-        "tooltip": { "mode": "multi", "sort": "none" }
+      "gridPos": {
+        "x": 15,
+        "y": 10,
+        "w": 5,
+        "h": 8
       },
       "targets": [
         {
@@ -93,45 +308,270 @@
             "type": "core-datasource",
             "uid": "core-datasource"
           },
-          "ref": "basic-data-app/gdp_yoy"
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"GDPC1\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/namq_10_gdp/Q.CLV10_MEUR.SCA.B1GQ.EA19\"),\n    \"GB\": (\"dbnomics\", \"OECD/QNA/GBR.B1_GE.LNBQRSA.Q\"),\n    \"JP\": (\"dbnomics\", \"OECD/QNA/JPN.B1_GE.LNBQRSA.Q\"),\n    # UNRESOLVED: China is not in OECD/QNA. NBS/Q_A0102/A010201 provides constant-price quarterly\n    # levels but with sparse history (2024+); NBS/Q_A0103/A010301 gives YoY index (preceding\n    # year=100) which would need different handling than _yoy(). Operator must decide approach.\n    \"CN\": (\"dbnomics\", \"OECD/QNA/CHN.B1_GE.LNBQRSA.Q\"),\n}\n\n@metric(output=\"series\")\ndef gdp_yoy():\n    p, c = SERIES[\"JP\"]; return _yoy(_series(p, c), 4).select(\"ts\", \"value\")\n"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "type": "row",
+      "title": "Labor \u2014 Unemployment",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 13,
+      "title": "Unemployment \u2014 US",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"UNRATE\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/une_rt_m/M.SA.TOTAL.PC_ACT.T.EA20\"),             # was EA19 (404; EA composition updated to EA20)\n    \"GB\": (\"dbnomics\", \"OECD/DSD_LFS@DF_IALFS_UNE_M/GBR.UNE_LF_M.PT_LF_SUB._Z.Y._T.Y_GE15._Z.M\"),  # was OECD/STLABOUR/GBR (404; dataset renamed DSD_LFS@DF_IALFS_UNE_M)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_LFS@DF_IALFS_UNE_M/JPN.UNE_LF_M.PT_LF_SUB._Z.Y._T.Y_GE15._Z.M\"),  # was OECD/STLABOUR/JPN\n    # UNRESOLVED: China monthly unemployment not available in OECD/DSD_LFS (CHN not a member).\n    # NBS publishes registered unemployment (quarterly) but not ILO-methodology monthly rate.\n    # Operator should source from e.g. NBS or accept panel error for CN.\n    \"CN\": (\"dbnomics\", \"OECD/STLABOUR/CHN.LRHUTTTT.STSA.M\"),\n}\n\n@metric(output=\"series\")\ndef unemployment():\n    p, c = SERIES[\"US\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 14,
+      "title": "Unemployment \u2014 EA",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 5,
+        "y": 19,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"UNRATE\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/une_rt_m/M.SA.TOTAL.PC_ACT.T.EA20\"),             # was EA19 (404; EA composition updated to EA20)\n    \"GB\": (\"dbnomics\", \"OECD/DSD_LFS@DF_IALFS_UNE_M/GBR.UNE_LF_M.PT_LF_SUB._Z.Y._T.Y_GE15._Z.M\"),  # was OECD/STLABOUR/GBR (404; dataset renamed DSD_LFS@DF_IALFS_UNE_M)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_LFS@DF_IALFS_UNE_M/JPN.UNE_LF_M.PT_LF_SUB._Z.Y._T.Y_GE15._Z.M\"),  # was OECD/STLABOUR/JPN\n    # UNRESOLVED: China monthly unemployment not available in OECD/DSD_LFS (CHN not a member).\n    # NBS publishes registered unemployment (quarterly) but not ILO-methodology monthly rate.\n    # Operator should source from e.g. NBS or accept panel error for CN.\n    \"CN\": (\"dbnomics\", \"OECD/STLABOUR/CHN.LRHUTTTT.STSA.M\"),\n}\n\n@metric(output=\"series\")\ndef unemployment():\n    p, c = SERIES[\"EA\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 15,
+      "title": "Unemployment \u2014 GB",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 19,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"UNRATE\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/une_rt_m/M.SA.TOTAL.PC_ACT.T.EA20\"),             # was EA19 (404; EA composition updated to EA20)\n    \"GB\": (\"dbnomics\", \"OECD/DSD_LFS@DF_IALFS_UNE_M/GBR.UNE_LF_M.PT_LF_SUB._Z.Y._T.Y_GE15._Z.M\"),  # was OECD/STLABOUR/GBR (404; dataset renamed DSD_LFS@DF_IALFS_UNE_M)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_LFS@DF_IALFS_UNE_M/JPN.UNE_LF_M.PT_LF_SUB._Z.Y._T.Y_GE15._Z.M\"),  # was OECD/STLABOUR/JPN\n    # UNRESOLVED: China monthly unemployment not available in OECD/DSD_LFS (CHN not a member).\n    # NBS publishes registered unemployment (quarterly) but not ILO-methodology monthly rate.\n    # Operator should source from e.g. NBS or accept panel error for CN.\n    \"CN\": (\"dbnomics\", \"OECD/STLABOUR/CHN.LRHUTTTT.STSA.M\"),\n}\n\n@metric(output=\"series\")\ndef unemployment():\n    p, c = SERIES[\"GB\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 16,
+      "title": "Unemployment \u2014 JP",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 19,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"UNRATE\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/une_rt_m/M.SA.TOTAL.PC_ACT.T.EA20\"),             # was EA19 (404; EA composition updated to EA20)\n    \"GB\": (\"dbnomics\", \"OECD/DSD_LFS@DF_IALFS_UNE_M/GBR.UNE_LF_M.PT_LF_SUB._Z.Y._T.Y_GE15._Z.M\"),  # was OECD/STLABOUR/GBR (404; dataset renamed DSD_LFS@DF_IALFS_UNE_M)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_LFS@DF_IALFS_UNE_M/JPN.UNE_LF_M.PT_LF_SUB._Z.Y._T.Y_GE15._Z.M\"),  # was OECD/STLABOUR/JPN\n    # UNRESOLVED: China monthly unemployment not available in OECD/DSD_LFS (CHN not a member).\n    # NBS publishes registered unemployment (quarterly) but not ILO-methodology monthly rate.\n    # Operator should source from e.g. NBS or accept panel error for CN.\n    \"CN\": (\"dbnomics\", \"OECD/STLABOUR/CHN.LRHUTTTT.STSA.M\"),\n}\n\n@metric(output=\"series\")\ndef unemployment():\n    p, c = SERIES[\"JP\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 17,
+      "type": "row",
+      "title": "Policy Rates",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 18,
+      "title": "Policy Rate \u2014 US",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"DFF\"),\n    \"EA\": (\"dbnomics\", \"ECB/FM/D.U2.EUR.4F.KR.MRR_FR.LEV\"),\n    \"GB\": (\"dbnomics\", \"BIS/WS_CBPOL/D.GB\"),       # was BOE/IUDBEDR/IUDBEDR (404)\n    \"JP\": (\"dbnomics\", \"BIS/WS_CBPOL/D.JP\"),        # was BIS/cbpol/D.JP (404; dataset renamed WS_CBPOL)\n    \"CN\": (\"dbnomics\", \"BIS/WS_CBPOL/D.CN\"),        # was BIS/cbpol/D.CN (404; dataset renamed WS_CBPOL)\n}\n\n@metric(output=\"series\")\ndef policy_rate():\n    p, c = SERIES[\"US\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 19,
+      "title": "Policy Rate \u2014 EA",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 5,
+        "y": 28,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"DFF\"),\n    \"EA\": (\"dbnomics\", \"ECB/FM/D.U2.EUR.4F.KR.MRR_FR.LEV\"),\n    \"GB\": (\"dbnomics\", \"BIS/WS_CBPOL/D.GB\"),       # was BOE/IUDBEDR/IUDBEDR (404)\n    \"JP\": (\"dbnomics\", \"BIS/WS_CBPOL/D.JP\"),        # was BIS/cbpol/D.JP (404; dataset renamed WS_CBPOL)\n    \"CN\": (\"dbnomics\", \"BIS/WS_CBPOL/D.CN\"),        # was BIS/cbpol/D.CN (404; dataset renamed WS_CBPOL)\n}\n\n@metric(output=\"series\")\ndef policy_rate():\n    p, c = SERIES[\"EA\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 20,
-      "type": "row",
-      "title": "Labor",
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 }
+      "title": "Policy Rate \u2014 GB",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 28,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"DFF\"),\n    \"EA\": (\"dbnomics\", \"ECB/FM/D.U2.EUR.4F.KR.MRR_FR.LEV\"),\n    \"GB\": (\"dbnomics\", \"BIS/WS_CBPOL/D.GB\"),       # was BOE/IUDBEDR/IUDBEDR (404)\n    \"JP\": (\"dbnomics\", \"BIS/WS_CBPOL/D.JP\"),        # was BIS/cbpol/D.JP (404; dataset renamed WS_CBPOL)\n    \"CN\": (\"dbnomics\", \"BIS/WS_CBPOL/D.CN\"),        # was BIS/cbpol/D.CN (404; dataset renamed WS_CBPOL)\n}\n\n@metric(output=\"series\")\ndef policy_rate():\n    p, c = SERIES[\"GB\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 21,
+      "title": "Policy Rate \u2014 JP",
       "type": "timeseries",
-      "title": "Unemployment — $country",
-      "repeat": "country",
-      "repeatDirection": "h",
-      "maxPerRow": 4,
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 19 },
       "datasource": {
         "type": "core-datasource",
         "uid": "core-datasource"
       },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 2,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "spanNulls": true,
-            "showPoints": "never"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
-        "tooltip": { "mode": "multi", "sort": "none" }
+      "gridPos": {
+        "x": 15,
+        "y": 28,
+        "w": 5,
+        "h": 8
       },
       "targets": [
         {
@@ -140,136 +580,213 @@
             "type": "core-datasource",
             "uid": "core-datasource"
           },
-          "ref": "basic-data-app/unemployment"
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"DFF\"),\n    \"EA\": (\"dbnomics\", \"ECB/FM/D.U2.EUR.4F.KR.MRR_FR.LEV\"),\n    \"GB\": (\"dbnomics\", \"BIS/WS_CBPOL/D.GB\"),       # was BOE/IUDBEDR/IUDBEDR (404)\n    \"JP\": (\"dbnomics\", \"BIS/WS_CBPOL/D.JP\"),        # was BIS/cbpol/D.JP (404; dataset renamed WS_CBPOL)\n    \"CN\": (\"dbnomics\", \"BIS/WS_CBPOL/D.CN\"),        # was BIS/cbpol/D.CN (404; dataset renamed WS_CBPOL)\n}\n\n@metric(output=\"series\")\ndef policy_rate():\n    p, c = SERIES[\"JP\"]; return _series(p, c).select(\"ts\", \"value\")\n"
         }
-      ]
-    },
-    {
-      "id": 30,
-      "type": "row",
-      "title": "Policy",
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 }
-    },
-    {
-      "id": 31,
-      "type": "timeseries",
-      "title": "Policy Rate — $country",
-      "repeat": "country",
-      "repeatDirection": "h",
-      "maxPerRow": 4,
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 28 },
-      "datasource": {
-        "type": "core-datasource",
-        "uid": "core-datasource"
-      },
+      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "decimals": 2,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "spanNulls": true,
-            "showPoints": "never"
-          }
+          "unit": "percent"
         },
         "overrides": []
-      },
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
-        "tooltip": { "mode": "multi", "sort": "none" }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "core-datasource",
-            "uid": "core-datasource"
-          },
-          "ref": "basic-data-app/policy_rate"
-        }
-      ]
-    },
-    {
-      "id": 40,
-      "type": "row",
-      "title": "Yields",
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 }
-    },
-    {
-      "id": 41,
-      "type": "timeseries",
-      "title": "10Y Yield — $country",
-      "repeat": "country",
-      "repeatDirection": "h",
-      "maxPerRow": 4,
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 37 },
-      "datasource": {
-        "type": "core-datasource",
-        "uid": "core-datasource"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 2,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "spanNulls": true,
-            "showPoints": "never"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
-        "tooltip": { "mode": "multi", "sort": "none" }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "core-datasource",
-            "uid": "core-datasource"
-          },
-          "ref": "basic-data-app/yield_10y"
-        }
-      ]
-    }
-  ],
-  "refresh": "5m",
-  "schemaVersion": 41,
-  "tags": ["yfinance", "macro", "world"],
-  "templating": {
-    "list": [
-      {
-        "name": "country",
-        "label": "Country",
-        "type": "custom",
-        "multi": true,
-        "includeAll": false,
-        "query": "US,EA,GB,JP,CN",
-        "current": {
-          "text": ["US"],
-          "value": ["US"]
-        },
-        "options": [
-          { "text": "US", "value": "US", "selected": true },
-          { "text": "EA", "value": "EA", "selected": false },
-          { "text": "GB", "value": "GB", "selected": false },
-          { "text": "JP", "value": "JP", "selected": false },
-          { "text": "CN", "value": "CN", "selected": false }
-        ]
       }
-    ]
-  },
-  "time": {
-    "from": "now-10y",
-    "to": "now"
-  },
-  "timezone": "browser",
-  "title": "World Macro",
-  "uid": "basic-data-world-macro"
+    },
+    {
+      "id": 22,
+      "title": "Policy Rate \u2014 CN",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 28,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"DFF\"),\n    \"EA\": (\"dbnomics\", \"ECB/FM/D.U2.EUR.4F.KR.MRR_FR.LEV\"),\n    \"GB\": (\"dbnomics\", \"BIS/WS_CBPOL/D.GB\"),       # was BOE/IUDBEDR/IUDBEDR (404)\n    \"JP\": (\"dbnomics\", \"BIS/WS_CBPOL/D.JP\"),        # was BIS/cbpol/D.JP (404; dataset renamed WS_CBPOL)\n    \"CN\": (\"dbnomics\", \"BIS/WS_CBPOL/D.CN\"),        # was BIS/cbpol/D.CN (404; dataset renamed WS_CBPOL)\n}\n\n@metric(output=\"series\")\ndef policy_rate():\n    p, c = SERIES[\"CN\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 23,
+      "type": "row",
+      "title": "10Y Yields",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 24,
+      "title": "10Y Yield \u2014 US",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"DGS10\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/irt_lt_mcby_d/D.MCBY.EA\"),                       # was D.EA (404; series code is D.MCBY.EA)\n    \"GB\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/GBR.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.GBR.M (404; MEI_FIN \u2192 DSD_STES@DF_FINMARK)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/JPN.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.JPN.M\n    \"CN\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/CHN.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.CHN.M\n}\n\n@metric(output=\"series\")\ndef yield_10y():\n    p, c = SERIES[\"US\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 25,
+      "title": "10Y Yield \u2014 EA",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 5,
+        "y": 37,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"DGS10\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/irt_lt_mcby_d/D.MCBY.EA\"),                       # was D.EA (404; series code is D.MCBY.EA)\n    \"GB\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/GBR.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.GBR.M (404; MEI_FIN \u2192 DSD_STES@DF_FINMARK)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/JPN.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.JPN.M\n    \"CN\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/CHN.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.CHN.M\n}\n\n@metric(output=\"series\")\ndef yield_10y():\n    p, c = SERIES[\"EA\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 26,
+      "title": "10Y Yield \u2014 GB",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 37,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"DGS10\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/irt_lt_mcby_d/D.MCBY.EA\"),                       # was D.EA (404; series code is D.MCBY.EA)\n    \"GB\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/GBR.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.GBR.M (404; MEI_FIN \u2192 DSD_STES@DF_FINMARK)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/JPN.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.JPN.M\n    \"CN\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/CHN.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.CHN.M\n}\n\n@metric(output=\"series\")\ndef yield_10y():\n    p, c = SERIES[\"GB\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 27,
+      "title": "10Y Yield \u2014 JP",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 37,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"DGS10\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/irt_lt_mcby_d/D.MCBY.EA\"),                       # was D.EA (404; series code is D.MCBY.EA)\n    \"GB\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/GBR.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.GBR.M (404; MEI_FIN \u2192 DSD_STES@DF_FINMARK)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/JPN.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.JPN.M\n    \"CN\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/CHN.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.CHN.M\n}\n\n@metric(output=\"series\")\ndef yield_10y():\n    p, c = SERIES[\"JP\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 28,
+      "title": "10Y Yield \u2014 CN",
+      "type": "timeseries",
+      "datasource": {
+        "type": "core-datasource",
+        "uid": "core-datasource"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 37,
+        "w": 5,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "core-datasource",
+            "uid": "core-datasource"
+          },
+          "source": "def _fred_key():\n    r = sql(\"SELECT value FROM basic_data.app_settings WHERE key = $1\", \"fred_api_key\")\n    if r.is_empty() or r[\"value\"][0] in (None, \"\"):\n        raise ValueError(\"FRED API key not set \u2014 add it in Basic Data \u2192 Settings\")\n    return r[\"value\"][0]\n\ndef _fred(series_id):\n    js = fetch_json(\"https://api.stlouisfed.org/fred/series/observations\",\n                    params={\"series_id\": series_id, \"api_key\": _fred_key(), \"file_type\": \"json\"})\n    obs = js[\"observations\"]\n    ts = [o[\"date\"] for o in obs]\n    val = [None if o[\"value\"] in (\".\", \"\") else float(o[\"value\"]) for o in obs]\n    return (pl.DataFrame({\"ts\": ts, \"value\": val})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _dbnomics(path):  # path = \"Provider/dataset/series\"\n    js = fetch_json(f\"https://api.db.nomics.world/v22/series/{path}?observations=1\")\n    doc = js[\"series\"][\"docs\"][0]\n    ts = doc.get(\"period_start_day\") or doc[\"period\"]\n    def _num(v):\n        try:\n            return float(v)\n        except (TypeError, ValueError):\n            return None  # DBnomics gaps come through as null or \"NA\"\n    return (pl.DataFrame({\"ts\": ts, \"value\": [_num(v) for v in doc[\"value\"]]})\n              .with_columns(pl.col(\"ts\").str.to_datetime(\"%Y-%m-%d\", strict=False).dt.epoch(\"us\"))\n              .drop_nulls())\n\ndef _series(provider, code):\n    return _fred(code) if provider == \"fred\" else _dbnomics(code)\n\ndef _yoy(df, periods):  # periods: 12 monthly, 4 quarterly\n    return (df.sort(\"ts\")\n              .with_columns((pl.col(\"value\") / pl.col(\"value\").shift(periods) * 100 - 100).alias(\"value\"))\n              .drop_nulls())\n\nSERIES = {\n    \"US\": (\"fred\", \"DGS10\"),\n    \"EA\": (\"dbnomics\", \"Eurostat/irt_lt_mcby_d/D.MCBY.EA\"),                       # was D.EA (404; series code is D.MCBY.EA)\n    \"GB\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/GBR.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.GBR.M (404; MEI_FIN \u2192 DSD_STES@DF_FINMARK)\n    \"JP\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/JPN.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.JPN.M\n    \"CN\": (\"dbnomics\", \"OECD/DSD_STES@DF_FINMARK/CHN.M.IRLT.PA._Z._Z._Z._Z.N\"), # was OECD/MEI_FIN/IRLT.CHN.M\n}\n\n@metric(output=\"series\")\ndef yield_10y():\n    p, c = SERIES[\"CN\"]; return _series(p, c).select(\"ts\", \"value\")\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    }
+  ]
 }

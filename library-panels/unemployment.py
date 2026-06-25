@@ -18,9 +18,13 @@ def _dbnomics(path):  # path = "Provider/dataset/series"
     js = fetch_json(f"https://api.db.nomics.world/v22/series/{path}?observations=1")
     doc = js["series"]["docs"][0]
     ts = doc.get("period_start_day") or doc["period"]
-    return (pl.DataFrame({"ts": ts, "value": doc["value"]})
-              .with_columns(pl.col("ts").str.to_datetime("%Y-%m-%d", strict=False).dt.epoch("us"),
-                            pl.col("value").cast(pl.Float64, strict=False))
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None  # DBnomics gaps come through as null or "NA"
+    return (pl.DataFrame({"ts": ts, "value": [_num(v) for v in doc["value"]]})
+              .with_columns(pl.col("ts").str.to_datetime("%Y-%m-%d", strict=False).dt.epoch("us"))
               .drop_nulls())
 
 def _series(provider, code):

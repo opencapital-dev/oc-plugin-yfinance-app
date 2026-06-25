@@ -1,9 +1,13 @@
+"""Validate dashboard + library-panel JSON.
+
+The macro dashboards (world-macro, macro-compare) use **inline `source`** targets
+with the country baked in per panel (not a `$country` repeat variable — panel
+repeat's scopedVars don't reach the core-datasource query, so every repeated panel
+resolved to the same country). So a core-datasource target is valid if it either
+names a shipped metric via `ref`, or carries a non-empty inline `@metric` source.
 """
-E1: Validate that all Grafana dashboard and library-panel JSON files are
-    internally consistent and reference only known metric Python files.
-"""
-import json
 import glob
+import json
 import os
 from pathlib import Path
 
@@ -14,45 +18,60 @@ METRICS = {
     for p in glob.glob(str(ROOT / "library-panels" / "*.py"))
 }
 
+COUNTRIES = {"US", "EA", "GB", "JP", "CN"}
 
-def _refs(obj):
-    """Recursively yield all 'ref' strings found inside core-datasource targets."""
+
+def _targets(obj):
+    """Recursively yield every core-datasource query target."""
     if isinstance(obj, dict):
         if obj.get("datasource", {}).get("type") == "core-datasource":
             for t in obj.get("targets", []):
-                r = t.get("ref")
-                if r:
-                    yield r
+                yield t
         for v in obj.values():
-            yield from _refs(v)
+            yield from _targets(v)
     elif isinstance(obj, list):
         for v in obj:
-            yield from _refs(v)
+            yield from _targets(v)
 
 
-def test_every_dashboard_ref_points_at_an_existing_metric():
-    dashboard_jsons = glob.glob(str(ROOT / "dashboards" / "*.json"))
-    library_jsons = glob.glob(str(ROOT / "library-panels" / "*.json"))
-    all_files = dashboard_jsons + library_jsons
-    assert all_files, "No dashboard or library-panel JSON files found"
+def _all_jsons():
+    files = glob.glob(str(ROOT / "dashboards" / "*.json")) + glob.glob(
+        str(ROOT / "library-panels" / "*.json")
+    )
+    assert files, "No dashboard or library-panel JSON files found"
+    return files
 
-    for f in all_files:
+
+def test_every_target_has_a_valid_ref_or_inline_source():
+    for f in _all_jsons():
         with open(f) as fh:
             d = json.load(fh)
-        for ref in _refs(d):
-            plugin, _, metric = ref.partition("/")
-            assert plugin == "basic-data-app", f"{f}: wrong plugin prefix in ref '{ref}'"
-            assert metric in METRICS, (
-                f"{f}: ref '{ref}' points at '{metric}' but no library-panels/{metric}.py exists"
-            )
+        for t in _targets(d):
+            ref = (t.get("ref") or "").strip()
+            src = (t.get("source") or "").strip()
+            if ref:
+                plugin, _, metric = ref.partition("/")
+                assert plugin == "basic-data-app", f"{f}: wrong plugin prefix in ref '{ref}'"
+                assert metric in METRICS, f"{f}: ref '{ref}' has no library-panels/{metric}.py"
+            else:
+                assert src and "@metric" in src, (
+                    f"{f}: target has neither a valid ref nor an inline @metric source"
+                )
 
 
-def test_dashboards_parse_and_have_country_variable():
-    world_macro_path = ROOT / "dashboards" / "world-macro.json"
-    assert world_macro_path.exists(), "dashboards/world-macro.json not found"
-    with open(world_macro_path) as fh:
-        d = json.load(fh)
-    names = [v["name"] for v in d.get("templating", {}).get("list", [])]
-    assert "country" in names, (
-        f"world-macro.json has no 'country' template variable; found: {names}"
-    )
+def test_macro_dashboards_have_per_country_panels():
+    for name in ("world-macro.json", "macro-compare.json"):
+        path = ROOT / "dashboards" / name
+        assert path.exists(), f"dashboards/{name} not found"
+        with open(path) as fh:
+            d = json.load(fh)
+        countries = {
+            p["title"].rsplit("—", 1)[-1].strip()
+            for p in d.get("panels", [])
+            if p.get("type") != "row" and "—" in p.get("title", "")
+        }
+        # Each metric is rendered once per country -> per-country panels exist.
+        assert {"US", "EA", "GB", "JP"} <= countries, (
+            f"{name}: expected per-country panels (US/EA/GB/JP), got {countries}"
+        )
+        assert countries <= COUNTRIES, f"{name}: unexpected country in titles: {countries}"
