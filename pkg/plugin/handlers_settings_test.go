@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
@@ -60,5 +61,35 @@ func TestTestFredRejectsNonPost(t *testing.T) {
 	app.handleTestFred(rec, req)
 	if rec.Code != 405 {
 		t.Fatalf("want 405, got %d", rec.Code)
+	}
+}
+
+type settingsClient struct{ execs []string }
+
+func (c *settingsClient) Exec(context.Context, string, ...any) (int64, error) { return 0, nil }
+func (c *settingsClient) Query(context.Context, string, ...any) (pluginclient.Result, error) {
+	return pluginclient.Result{}, nil
+}
+func (c *settingsClient) PGExec(_ context.Context, sql string, args ...any) (int64, error) {
+	c.execs = append(c.execs, sql)
+	return 1, nil
+}
+func (c *settingsClient) PGQuery(_ context.Context, sql string, args ...any) (pluginclient.Result, error) {
+	// option_poll keys lookup → return enable=false, interval=600
+	if strings.Contains(sql, "option_poll") {
+		return pluginclient.Result{
+			Columns: []pluginclient.Column{{Name: "key"}, {Name: "value"}},
+			Rows:    [][]any{{"option_poll_enable", "false"}, {"option_poll_interval_sec", "600"}},
+		}, nil
+	}
+	return pluginclient.Result{}, nil // fred key absent
+}
+func (c *settingsClient) Config() pluginclient.Config { return pluginclient.Config{} }
+
+func TestSettingsGetIncludesOptionPoll(t *testing.T) {
+	a := &App{client: &settingsClient{}, options: AppOptions{DiscoveryPollSec: 15, YfinanceQPS: 1, YfinanceBurst: 3}}
+	body := optionPollSettings(context.Background(), a.client) // helper under test
+	if body.Enable != false || body.IntervalSec != 600 {
+		t.Fatalf("got %+v, want enable=false interval=600", body)
 	}
 }

@@ -7,6 +7,8 @@ export type Settings = {
   burst: number;
   liveEnable: boolean;
   backfillEnable: boolean;
+  optionPollEnable: boolean;
+  optionPollIntervalSec: number;
 };
 
 export const getSettings = () => resRequest<Settings>('/settings');

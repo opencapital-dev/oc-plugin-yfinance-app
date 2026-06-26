@@ -180,6 +180,9 @@ func TestListSubscribedTickerMappingsSQL(t *testing.T) {
 	if !strings.Contains(sql, "WHERE subscribed") {
 		t.Errorf("SQL missing WHERE subscribed: %s", sql)
 	}
+	if !strings.Contains(sql, "IS DISTINCT FROM 'option_underlying'") {
+		t.Errorf("SQL must exclude option_underlying rows: %s", sql)
+	}
 }
 
 func TestSetCanonicalIdentitySQL(t *testing.T) {

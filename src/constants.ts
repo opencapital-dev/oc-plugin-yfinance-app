@@ -4,7 +4,8 @@ export const PLUGIN_ID = pluginJson.id;
 export const PLUGIN_BASE_URL = `/a/${pluginJson.id}`;
 
 export enum ROUTES {
-  Tickers = 'tickers',
+  Overview = 'overview',
+  Instruments = 'instruments',
   Settings = 'settings',
 }
 

@@ -170,6 +170,7 @@ func (a *App) ListSubscribedTickerMappings(ctx context.Context) ([]TickerMapping
 		       vendor_meta, subscribed, created_at, updated_at, updated_by
 		  FROM basic_data.instrument_ticker_mapping
 		 WHERE subscribed
+		   AND (vendor_meta->>'kind') IS DISTINCT FROM 'option_underlying'
 		 ORDER BY portfolio_id, instrument_id
 	`)
 	if err != nil {

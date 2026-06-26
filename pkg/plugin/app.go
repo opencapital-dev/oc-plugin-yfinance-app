@@ -43,6 +43,7 @@ type App struct {
 	runtimeStarted bool
 	stopBackfill   context.CancelFunc
 	stopDiscovery  context.CancelFunc
+	stopOptionPoll context.CancelFunc
 	live           *LiveSubscriber
 }
 
@@ -154,6 +155,9 @@ func (a *App) Dispose() {
 	if a.stopBackfill != nil {
 		a.stopBackfill()
 	}
+	if a.stopOptionPoll != nil {
+		a.stopOptionPoll()
+	}
 	if a.live != nil {
 		a.live.Close()
 	}
@@ -207,4 +211,5 @@ func (a *App) ensureRuntime(ctx context.Context) {
 	a.stopDiscovery = StartDiscoveryLoop(
 		runCtx, a.client, a, a.jobs, a.live, a.options.DiscoveryPollSec,
 	)
+	a.stopOptionPoll = StartOptionPollLoop(runCtx, a.client, a.yf, a.pluginID)
 }
