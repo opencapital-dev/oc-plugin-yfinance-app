@@ -117,7 +117,7 @@ func (a *App) handleTestFred(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
-	defer func() { _, _ = io.Copy(io.Discard, resp.Body); resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	writeJSON(w, map[string]any{"ok": resp.StatusCode == 200, "status": resp.StatusCode})
 }
 

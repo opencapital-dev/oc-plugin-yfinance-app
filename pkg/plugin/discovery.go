@@ -123,7 +123,7 @@ func discoveryTick(
 		windowGrew := hasPrev && prevStart > firstTsUs
 		firstTime := !hasPrev
 
-		if !(mappingChanged || windowGrew || firstTime) {
+		if !mappingChanged && !windowGrew && !firstTime {
 			continue
 		}
 
