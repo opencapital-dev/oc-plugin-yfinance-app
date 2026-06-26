@@ -18,7 +18,7 @@ const AppConfig = (_props: AppConfigProps) => {
       </p>
       <ul className={s.body}>
         <li>
-          <code>YFINANCE_INGESTOR_URL</code> on the plugin's Go backend (default{' '}
+          <code>YFINANCE_INGESTOR_URL</code> on the plugin&apos;s Go backend (default{' '}
           <code>http://ingestor-yfinance:8000</code>) — base URL for the upstream API.
         </li>
         <li>

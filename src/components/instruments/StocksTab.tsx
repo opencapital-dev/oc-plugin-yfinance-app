@@ -83,7 +83,7 @@ export function StocksTab() {
     let handle = 0;
     const tick = async () => {
       const data = await refresh();
-      if (stopped) return;
+      if (stopped) { return; }
       const active = data.some(isActive);
       handle = window.setTimeout(tick, active ? 2_500 : 8_000);
     };
@@ -207,7 +207,7 @@ export function StocksTab() {
     const workers = Array.from({ length: LOOKUP_CONCURRENCY }, async () => {
       while (queue.length > 0) {
         const row = queue.shift();
-        if (!row) return;
+        if (!row) { return; }
         const candidates = await fetchCandidates(row);
         if (!candidates || candidates.length === 0) {
           continue;
@@ -563,14 +563,15 @@ function LiveTick({ row }: { row: InstrumentUsedRow }) {
   if (typeof us !== 'number' || !Number.isFinite(us)) {
     return <span className={fmt.muted}>—</span>;
   }
+  // eslint-disable-next-line react-hooks/purity -- relative "age ago" label intentionally reads the wall clock
   const sec = (Date.now() * 1000 - us) / 1_000_000;
   return <span className={fmt.mono}>{ageHuman(sec)} ago</span>;
 }
 
 function ageHuman(sec: number): string {
-  if (sec < 60) return `${Math.round(sec)}s`;
-  if (sec < 3600) return `${Math.round(sec / 60)}m`;
-  if (sec < 86400) return `${Math.round(sec / 3600)}h`;
+  if (sec < 60) { return `${Math.round(sec)}s`; }
+  if (sec < 3600) { return `${Math.round(sec / 60)}m`; }
+  if (sec < 86400) { return `${Math.round(sec / 3600)}h`; }
   return `${Math.round(sec / 86400)}d`;
 }
 
