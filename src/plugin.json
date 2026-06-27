@@ -27,5 +27,26 @@
   "dependencies": {
     "grafanaDependency": ">=12.3.0",
     "plugins": []
+  },
+  "opencapital": {
+    "plugin_id": "basic-data-app",
+    "platform_plugin": false,
+    "logical_views": [
+      { "name": "instruments_used_v", "source_table": "public.instruments_used" },
+      { "name": "fx_pairs_used_v", "source_table": "public.fx_pairs_used" }
+    ],
+    "query_entities": [
+      {
+        "name": "classification",
+        "table": "instrument_ticker_mapping",
+        "scope": "portfolio_id",
+        "scope_label": "portfolio",
+        "time_col": "",
+        "grain": ["instrument_id", "portfolio_id"],
+        "labels": { "portfolio": "portfolio_id", "instrument": "instrument_id" },
+        "columns": ["instrument_id", "portfolio_id", "sector", "subindustry"],
+        "kinds": { "instrument_id": "string", "portfolio_id": "string", "sector": "string", "subindustry": "string" }
+      }
+    ]
   }
 }
