@@ -8,13 +8,14 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: write
-  packages: write
-  id-token: write
-
 jobs:
   release:
+    # permissions on the calling job (reusable-workflow calls honor job-level,
+    # not top-level, for propagating GITHUB_TOKEN scope to the called workflow)
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
     uses: opencapital-dev/opencapital/.github/workflows/plugin-release.yml@main
     with:
       id: basic-data-app
